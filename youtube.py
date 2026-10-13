@@ -1,16 +1,25 @@
 """Sube el compacto a YouTube (YouTube Data API v3).
 
-Costo de cuota: videos.insert 1600 + thumbnails.set 50 + playlistItems.insert 50 por video (cuota diaria estándar: 10.000).
+Todos los videos tienen que quedar restringidos a mayores de 18. La API no documenta cómo marcarlo
+(contentDetails.contentRating.ytRating figura como solo lectura), así que:
+  1. se sube siempre como privado, intentando marcar la restricción;
+  2. se lee el video y solo si YouTube confirma la restricción se aplica la privacidad configurada;
+  3. si no, queda privado y se avisa para marcarlo a mano en YouTube Studio.
+
+Costo de cuota por video: videos.insert 1600 + thumbnails.set 50 + videos.list 1 + videos.update 50
++ playlistItems.insert 50 (cuota diaria estándar: 10.000).
 
 Autorizar por primera vez (genera token.json; su contenido va al secreto YT_TOKEN_JSON de GitHub):
   python youtube.py autorizar ruta/client_secret.json
 """
+import datetime as dt
 import json
 import sys
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 import config
@@ -19,6 +28,9 @@ SCOPES = ["https://www.googleapis.com/auth/youtube"]
 
 LEYENDA = ("+18 Jugar compulsivamente es perjudicial para la salud. Prohibida su venta a menores de 18 años. "
            "Para más información comunicarse al 387-5420599 / 0800-55 5846 (JUEGO).")
+DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+HORARIOS = ("Sorteos de la Tómbola: lunes a viernes 12:00, 15:00, 18:00, 21:00 y 22:30 hs; "
+            "sábados 12:00, 15:00, 21:00 y 22:30 hs; domingos 12:00 y 15:00 hs.")
 
 
 def credenciales():
@@ -34,48 +46,102 @@ def credenciales():
     return cred
 
 
-def titulo_y_descripcion(d):
+def _mmss(segundos):
+    return f"{int(segundos) // 60}:{int(segundos) % 60:02d}"
+
+
+def metadatos(d):
+    """Título, descripción y etiquetas pensados para búsqueda ("tómbola salta matutina hoy", "quiniela de salta")."""
     nombre = d["sorteo_nombre"].title()
-    titulo = f"Tómbola {nombre} N° {d['sorteo_numero']} - {d['fecha']} | A la cabeza {d['cabeza']}"
+    fecha = dt.datetime.strptime(d["fecha"], "%d/%m/%Y")
+    dia = DIAS[fecha.weekday()]
+
+    titulo = f"Tómbola de Salta {nombre} {d['fecha']} | Sorteo {d['sorteo_numero']} | A la cabeza {d['cabeza']}"
+    if d.get("tombola_total") and len(titulo) + len(d["tombola_total"]) + 20 <= 100:
+        titulo += f" + Tómbola Total {d['tombola_total']}"
+
     lineas = [
-        f"Sorteo de la Tómbola {nombre} N° {d['sorteo_numero']} del {d['fecha']} a las {d['hora']} hs.",
+        f"Resultados de la Tómbola de Salta (Quiniela de Salta), sorteo {nombre} N° {d['sorteo_numero']} "
+        f"del {dia} {d['fecha']} a las {d['hora']} hs.",
         f"A la cabeza: {d['cabeza']}",
+        "",
     ]
+    if d.get("changuita"):
+        lineas.append(f"La Changuita: sorteo N° {d['changuita']}.")
     if d.get("tombola_total"):
-        lineas.append(f"Incluye el sorteo de Tómbola Total N° {d['tombola_total']}.")
-    lineas += ["", "Resultados provisorios. Los resultados oficiales se publican en www.loteriadesalta.com", "",
-               LEYENDA]
-    return titulo[:100], "\n".join(lineas)
+        lineas.append(f"Tómbola Total: sorteo N° {d['tombola_total']}.")
+    if d.get("capitulos"):
+        lineas += ["", "Capítulos:"] + [f"{_mmss(t)} {texto}" for t, texto in d["capitulos"]]
+    lineas += [
+        "",
+        "Resultados provisorios. El extracto oficial se publica en https://www.loteriadesalta.com",
+        HORARIOS,
+        "Suscribite para ver el resumen de cada sorteo.",
+        "",
+        LEYENDA,
+        "",
+        f"#TómbolaDeSalta #QuinielaDeSalta #Tómbola{nombre.replace(' ', '')}",
+    ]
+
+    etiquetas = ["Tómbola de Salta", "Tómbola Salta", "Quiniela de Salta", "Quiniela Salta", "Lotería de Salta",
+                 f"Tómbola {nombre}", f"Tómbola {nombre} hoy", f"Quiniela {nombre} Salta", f"Tómbola {d['fecha']}",
+                 "resultados Tómbola", "sorteo Tómbola", "La Changuita", "extracto Tómbola"]
+    if d.get("tombola_total"):
+        etiquetas.append("Tómbola Total")
+    return titulo[:100], "\n".join(lineas), etiquetas
 
 
 def subir(video, datos, privacidad, miniatura=None):
+    """Sube el video. Devuelve {video_id, url, titulo, privacidad, mayores_18}."""
     yt = build("youtube", "v3", credentials=credenciales(), cache_discovery=False)
-    titulo, descripcion = titulo_y_descripcion(datos)
+    titulo, descripcion, etiquetas = metadatos(datos)
+    inicio = dt.datetime.strptime(f"{datos['fecha']} {datos['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
     cuerpo = {
         "snippet": {"title": titulo, "description": descripcion, "categoryId": config.YT_CATEGORIA,
-                    "tags": ["Tómbola", "Lotería de Salta", "sorteo", datos["sorteo_nombre"].title(), "resultados"],
-                    "defaultLanguage": "es", "defaultAudioLanguage": "es"},
-        "status": {"privacyStatus": privacidad, "selfDeclaredMadeForKids": False},
+                    "tags": etiquetas, "defaultLanguage": "es-419", "defaultAudioLanguage": "es-419"},
+        "status": {"privacyStatus": "private", "selfDeclaredMadeForKids": False},
+        "recordingDetails": {"recordingDate": inicio.isoformat()},
+        "contentDetails": {"contentRating": {"ytRating": "ytAgeRestricted"}},  # intento de marcar +18
     }
-    media = MediaFileUpload(str(video), mimetype="video/mp4", chunksize=8 * 1024 * 1024, resumable=True)
-    pedido = yt.videos().insert(part="snippet,status", body=cuerpo, media_body=media)
-    respuesta = None
-    while respuesta is None:
-        _, respuesta = pedido.next_chunk()
+
+    def insertar(partes):
+        media = MediaFileUpload(str(video), mimetype="video/mp4", chunksize=8 * 1024 * 1024, resumable=True)
+        pedido = yt.videos().insert(part=",".join(partes), body={p: cuerpo[p] for p in partes}, media_body=media)
+        respuesta = None
+        while respuesta is None:
+            _, respuesta = pedido.next_chunk()
+        return respuesta
+
+    partes = ["snippet", "status", "recordingDetails", "contentDetails"]
+    try:
+        respuesta = insertar(partes)
+    except HttpError as e:
+        if e.resp.status != 400:
+            raise
+        # la API rechazó contentDetails: se sube sin él (el error llega antes de mandar el video)
+        respuesta = insertar(partes[:-1])
     video_id = respuesta["id"]
 
     if miniatura:
         try:  # requiere el canal verificado por teléfono; si falla, YouTube elige un cuadro
             yt.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(str(miniatura))).execute()
-        except Exception as e:
+        except HttpError as e:
             print(f"No se pudo poner la miniatura: {e}")
+
+    leido = yt.videos().list(part="contentDetails", id=video_id).execute()["items"][0]
+    mayores_18 = leido["contentDetails"].get("contentRating", {}).get("ytRating") == "ytAgeRestricted"
+    privacidad_final = "private"
+    if mayores_18 and privacidad != "private":
+        yt.videos().update(part="status", body={"id": video_id, "status": {
+            "privacyStatus": privacidad, "selfDeclaredMadeForKids": False}}).execute()
+        privacidad_final = privacidad
 
     playlists = json.loads(config.YT_PLAYLISTS or "{}")
     if pl := playlists.get(datos["sorteo_nombre"]):
         yt.playlistItems().insert(part="snippet", body={"snippet": {
             "playlistId": pl, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute()
     return {"video_id": video_id, "url": f"https://youtu.be/{video_id}", "titulo": titulo,
-            "privacidad": respuesta["status"]["privacyStatus"]}
+            "privacidad": privacidad_final, "mayores_18": mayores_18}
 
 
 def autorizar(client_secret):
@@ -89,5 +155,8 @@ def autorizar(client_secret):
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "autorizar":
         autorizar(sys.argv[2])
+    elif len(sys.argv) == 2:  # vista previa de título y descripción a partir del .json de un compacto
+        t, desc, tags = metadatos(json.loads(open(sys.argv[1], encoding="utf-8").read()))
+        print(f"TÍTULO ({len(t)}): {t}\n\n{desc}\n\nETIQUETAS ({len(','.join(tags))} caracteres): {', '.join(tags)}")
     else:
         print(__doc__)

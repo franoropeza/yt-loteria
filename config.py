@@ -39,9 +39,13 @@ CORTINA = ASSETS / "cortina.m4a"
 INTRO_DUR = 4.5
 BIENVENIDA_DUR = 12.0
 ANTES_CABEZA, DESPUES_CABEZA = 50.0, 15.0
-CIERRE_DUR = 8.0
+CIERRE_DUR = 10.0  # mínimo 10 s: YouTube exige capítulos de al menos 10 s
 FUNDIDO = 0.5
 MUSICA_DB = -20
+
+# Si el locutor dice alguno de estos términos en el tramo del compacto, el video queda privado para revisar.
+# Misma idea que TERMINOS_RIESGO de otro script (se comparan sin tildes y en minúscula).
+TERMINOS_RIESGO = []  # ver secreto TERMINOS_RIESGO
 
 WHISPER_MODELO = os.environ.get("WHISPER_MODELO", "small")
 

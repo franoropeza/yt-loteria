@@ -65,6 +65,9 @@ def procesar_vod(vod, subir):
             # con avisos se sube privado para revisarlo a mano, sin importar la configuración
             privacidad = "private" if info["avisos"] else config.YT_PRIVACIDAD
             registro.update(youtube.subir(info["compacto"], info, privacidad, info["miniatura"]), estado="ok")
+            if not registro["mayores_18"]:
+                registro["avisos"].append("No se pudo marcar +18 por la API: marcarlo en YouTube Studio "
+                                          "(Detalles > Público > Restricción de edad) y recién ahí publicarlo")
         return registro
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)  # el VOD pesa ~1 GB

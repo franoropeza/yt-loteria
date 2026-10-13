@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -55,6 +56,42 @@ def buscar_momentos(segmentos):
             if w["s"] >= inicio and CABEZA.search(w["w"]):
                 return inicio, w["s"], "La cabeza no se pudo confirmar con \"ubicación uno\": revisar el corte"
     raise CompactoError("No se encontró 'a la cabeza' en la transcripción")
+
+
+DIGITOS = {"cero": "0", "uno": "1", "un": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5",
+           "seis": "6", "siete": "7", "ocho": "8", "nueve": "9"}
+
+
+def sin_tildes(texto):
+    return unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
+
+
+def numeros_cantados(texto):
+    """Números que aparecen en el texto, uniendo cifras sueltas ("nueve, siete, cero, seis" -> "9706")."""
+    t = re.sub(r"(?<=\d)[.,](?=\d)", "", sin_tildes(texto))  # "9.706" -> "9706"
+    numeros, actual = set(), ""
+    for tok in re.findall(r"\d+|[a-z]+", t):
+        cifra = tok if tok.isdigit() else DIGITOS.get(tok)
+        if cifra is None:
+            if actual:
+                numeros.add(actual)
+            actual = ""
+        else:
+            actual += cifra
+    return numeros | ({actual} if actual else set())
+
+
+def revisar_locucion(segmentos, desde, hasta, t_cab, cabeza_ocr):
+    """Controles sobre lo que dice el locutor. Devuelve una lista de avisos."""
+    avisos = []
+    tramo = " ".join(s["text"] for s in segmentos if desde - 2 <= s["start"] <= hasta)
+    if riesgo := sorted({t for t in config.TERMINOS_RIESGO if t in sin_tildes(tramo)}):
+        avisos.append(f"El locutor menciona términos de riesgo en el compacto: {', '.join(riesgo)}")
+    # la cabeza va en el título: el número del tablero tiene que coincidir con el que cantó el locutor
+    alrededor = " ".join(s["text"] for s in segmentos if t_cab - 30 <= s["start"] <= t_cab + 20)
+    if cabeza_ocr and not any(cabeza_ocr in n for n in numeros_cantados(alrededor)):
+        avisos.append(f"La cabeza del tablero ({cabeza_ocr}) no coincide con la que cantó el locutor")
+    return avisos
 
 
 def buscar_tablero(vod, desde):
@@ -162,6 +199,18 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     piezas = [config.INTRO_DUR] + ([b_dur] if con_bienvenida else []) + [c_dur, config.CIERRE_DUR]
     n = len(piezas)
     total = sum(piezas) - config.FUNDIDO * (n - 1)
+    avisos += revisar_locucion(segmentos, b_ini if con_bienvenida else c_ini, c_ini + c_dur, t_cab, datos["cabeza"])
+
+    # capítulos de YouTube (en segundos dentro del compacto); cada uno tiene que durar 10 s o más
+    ini_cabeza = total - config.CIERRE_DUR - c_dur + config.FUNDIDO
+    capitulos = [(0, "Presentación"), (ini_cabeza, "Sorteo"),
+                 (ini_cabeza + (t_cab - c_ini) - 3, f"A la cabeza: {datos['cabeza']}"),
+                 (total - config.CIERRE_DUR, "Resultados")]
+    validos = [capitulos[0]]
+    for c in capitulos[1:]:
+        if c[0] - validos[-1][0] >= 10 and total - c[0] >= 10:
+            validos.append(c)
+    capitulos = validos
 
     entradas = ["-loop", "1", "-framerate", "30", "-t", str(config.INTRO_DUR), "-i", str(config.FONDO_INTRO), "-i", str(config.LOGO)]
     if con_bienvenida:
@@ -175,10 +224,9 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     titulo = f"{datos['sorteo_nombre']}  ·  SORTEO {datos['sorteo_numero']}  ·  {datos['fecha']}"
     norm = f"scale=1920:1080,setsar=1,fps=30,{EN_VIVO},format=yuv420p"
     f = []
-    # intro: zoom lento sobre el fondo + logo + título (y Tómbola Total si corresponde)
-    intro = (f"[0:v]scale=1920:1080,setsar=1,"
-             f"zoompan=z='1+0.0006*on':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=1920x1080:fps=30[fz];"
-             f"[1:v]scale=760:-1[logo];[fz][logo]overlay=x=(W-w)/2:y=300,"
+    # intro: fondo fijo + logo + título (y Tómbola Total si corresponde)
+    intro = (f"[0:v]scale=1920:1080,setsar=1,fps=30[fondo];"
+             f"[1:v]scale=760:-1[logo];[fondo][logo]overlay=x=(W-w)/2:y=300,"
              f"drawtext=fontfile='{fuente}':text='{texto_ff(titulo)}':fontsize=60:fontcolor=white:"
              f"x=(w-tw)/2:y=h*0.62:alpha='min(1,max(0,(t-0.6)*2))':shadowcolor=black@0.6:shadowx=3:shadowy=3")
     if datos.get("tombola_total"):
@@ -222,7 +270,8 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
 
     info = {**datos, "compacto": str(destino), "miniatura": str(destino.with_suffix(".jpg")),
             "duracion": round(total, 1), "inicio_bienvenida": round(t_ini, 1), "momento_cabeza": round(t_cab, 1),
-            "momento_datos": round(t_datos, 1), "momento_tablero": round(t_tab, 1), "avisos": avisos}
+            "momento_datos": round(t_datos, 1), "momento_tablero": round(t_tab, 1), "avisos": avisos,
+            "capitulos": [[round(t), nombre] for t, nombre in capitulos]}
     Image.open(cierre_png).convert("RGB").save(info["miniatura"], quality=90)  # el tablero sirve de miniatura
     destino.with_suffix(".json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
     shutil.rmtree(tmp, ignore_errors=True)

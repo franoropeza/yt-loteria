@@ -3,8 +3,8 @@
 Arma automáticamente un compacto de ~90 segundos de cada sorteo de la Tómbola transmitido por Twitch
 y lo sube a YouTube.
 
-**Compacto:** intro (logo + nombre, número y fecha del sorteo) → bienvenida del locutor →
-los 50 s previos a "a la cabeza" y 15 s después → captura del tablero final. La cortina musical
+**Compacto (90 s):** intro (logo + nombre, número y fecha del sorteo) → bienvenida del locutor →
+los 50 s previos a "a la cabeza" y 15 s después → captura del tablero final (10 s). La cortina musical
 baja sola cuando habla el locutor.
 
 ## Cómo funciona
@@ -20,9 +20,27 @@ baja sola cuando habla el locutor.
 
 ### Controles
 
-Si algo no cierra (el sorteo no está en el cronograma, el OCR no coincide con el cronograma,
-no se pudo leer la cabeza), el video **se sube como privado** aunque `YT_PRIVACIDAD` diga otra cosa,
-y la corrida queda en rojo: GitHub manda un mail y el detalle queda en el resumen de la corrida.
+El video **se sube como privado** (aunque `YT_PRIVACIDAD` diga otra cosa) y la corrida queda en rojo
+(GitHub manda un mail; el detalle queda en el resumen de la corrida) si:
+
+- la cabeza no se pudo confirmar con "ubicación uno" en los 30 s previos;
+- la cabeza leída en el tablero no coincide con la que cantó el locutor;
+- el locutor dice términos de riesgo en el tramo del compacto (ver secreto TERMINOS_RIESGO);
+- el sorteo no está en el cronograma o el tablero no coincide con el cronograma;
+- YouTube no confirma la restricción de edad (ver abajo).
+
+### Mayores de 18
+
+Todos los videos tienen que quedar restringidos a mayores de 18. La API de YouTube no documenta cómo marcarlo,
+así que se sube privado intentando marcarlo y después se lee el video: solo si YouTube confirma la restricción
+se aplica `YT_PRIVACIDAD`. Si no, queda privado y hay que marcarlo a mano en YouTube Studio
+(Detalles → Público → Restricción de edad → "Sí, restringir a mayores de 18") y recién ahí publicarlo.
+
+### Título y descripción
+
+Pensados para búsqueda: "Tómbola de Salta Matutina 12/10/2026 | Sorteo 16234 | A la cabeza 9706", descripción con
+la cabeza, La Changuita, Tómbola Total, capítulos, horarios, extracto oficial, leyenda +18 y hashtags.
+Vista previa: `python youtube.py salida/compacto_....json`.
 
 Si falla (no se encontró "a la cabeza", error de red, etc.) se reintenta en las próximas corridas,
 hasta 3 veces.
@@ -65,7 +83,7 @@ el token vence a los 7 días.
 ### 4. Verificación de YouTube (obligatoria para publicar)
 Los videos subidos por API desde un proyecto sin verificar quedan **bloqueados como privados**.
 Pedir la verificación en el formulario "YouTube API Services - Audit and Quota Extension".
-Cuota: cada compacto consume ~1.700 unidades (subida + miniatura + playlist); 5 sorteos por día = ~8.500
+Cuota: cada compacto consume ~1.750 unidades (subida + miniatura + lectura + publicación + playlist); 5 sorteos por día = ~8.750
 de las 10.000 diarias. Si el mismo proyecto se usa para otros scripts, pedir más cuota en el mismo formulario.
 
 ### 5. Probar

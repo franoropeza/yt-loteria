@@ -65,11 +65,14 @@ def transcribir(wav, hasta_cabeza=True):
     """Devuelve la lista de segmentos [{start, end, text, words:[{w, s, e}]}]."""
     segs, _ = modelo().transcribe(leer_wav(wav), language="es", word_timestamps=True, vad_filter=True,
                                   initial_prompt=PROMPT)
-    segmentos = []
+    segmentos, cabeza = [], None
     for s in segs:  # generador: cada segmento se transcribe recién al pedirlo
         segmentos.append({"start": s.start, "end": s.end, "text": s.text,
                           "words": [{"w": w.word, "s": w.start, "e": w.end} for w in s.words]})
-        if hasta_cabeza and CABEZA.search(s.text) and buscar_cabeza(segmentos) is not None:
+        if hasta_cabeza and cabeza is None and CABEZA.search(s.text):
+            cabeza = buscar_cabeza(segmentos)
+        # se sigue un poco después de la cabeza para cubrir todo el tramo que entra en el compacto
+        if cabeza is not None and s.start > cabeza + config.DESPUES_CABEZA + 5:
             break
     return segmentos
 
