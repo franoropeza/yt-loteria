@@ -1,0 +1,10 @@
+faster-whisper==1.2.1
+numpy==2.5.4
+pillow==12.3.0
+pytesseract==0.3.13
+pdfplumber==0.11.10
+google-api-python-client==2.201.0
+google-auth==2.62.0
+google-auth-oauthlib==1.5.0
+# yt-dlp sin fijar: Twitch cambia seguido y las versiones viejas dejan de funcionar
+yt-dlp>=2026.8.19

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+trabajo/
+salida/
+transcripciones/
+*.mp4
+*.wav
+token.json
+client_secret*.json
