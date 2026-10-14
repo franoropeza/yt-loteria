@@ -4,11 +4,10 @@ Configuración: crear un bot con @BotFather (da el token) y obtener el chat_id d
 donde llegan los avisos (ver README). Sin TELEGRAM_TOKEN / TELEGRAM_CHAT_ID no hace nada.
 """
 import json
-import mimetypes
 import urllib.request
-import uuid
 
 import config
+from formulario import multipart
 
 LIMITE_EPIGRAFE = 1024  # Telegram corta los epígrafes de fotos en 1024 caracteres
 
@@ -21,16 +20,9 @@ def _llamar(metodo, campos, archivo=None):
     url = f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}/{metodo}"
     if archivo is None:
         datos, tipo = json.dumps(campos).encode(), "application/json"
-    else:  # multipart/form-data a mano para no sumar dependencias
+    else:
         nombre_campo, ruta = archivo
-        borde = uuid.uuid4().hex
-        partes = [f'--{borde}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
-                  for k, v in campos.items()]
-        partes.append(f'--{borde}\r\nContent-Disposition: form-data; name="{nombre_campo}"; '
-                      f'filename="{ruta.name}"\r\nContent-Type: {mimetypes.guess_type(ruta.name)[0] or "image/jpeg"}'
-                      f'\r\n\r\n'.encode() + ruta.read_bytes() + b"\r\n")
-        partes.append(f"--{borde}--\r\n".encode())
-        datos, tipo = b"".join(partes), f"multipart/form-data; boundary={borde}"
+        datos, tipo = multipart(campos, {nombre_campo: ruta})
     pedido = urllib.request.Request(url, data=datos, headers={"Content-Type": tipo})
     with urllib.request.urlopen(pedido, timeout=60) as r:
         return json.load(r)
@@ -58,6 +50,8 @@ def texto_compacto(registro):
         lineas += [f"Subido como {registro['privacidad']}"
                    + (" · +18 confirmado" if registro.get("mayores_18") else " · falta marcar +18"),
                    f"Revisar y publicar: https://studio.youtube.com/video/{vid}/edit"]
+        if fb := registro.get("facebook"):
+            lineas.append(f"Facebook ({'publicado' if fb['publicado'] else 'sin publicar'}): {fb['url']}")
     else:
         lineas.append("Armado sin subir (prueba)")
     if avisos := registro.get("avisos"):

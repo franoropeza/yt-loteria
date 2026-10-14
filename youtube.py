@@ -50,8 +50,10 @@ def _mmss(segundos):
     return f"{int(segundos) // 60}:{int(segundos) % 60:02d}"
 
 
-def metadatos(d):
-    """Título, descripción y etiquetas pensados para búsqueda ("tómbola salta matutina hoy", "quiniela de salta")."""
+def metadatos(d, facebook=False):
+    """Título, descripción y etiquetas pensados para búsqueda ("tómbola salta matutina hoy", "quiniela de salta").
+
+    facebook=True: sin capítulos (Facebook no los usa) y con "Seguí la página" en vez de "Suscribite"."""
     nombre = d["sorteo_nombre"].title()
     fecha = dt.datetime.strptime(d["fecha"], "%d/%m/%Y")
     dia = DIAS[fecha.weekday()]
@@ -70,13 +72,14 @@ def metadatos(d):
         lineas.append(f"La Changuita: sorteo N° {d['changuita']}.")
     if d.get("tombola_total"):
         lineas.append(f"Tómbola Total: sorteo N° {d['tombola_total']}.")
-    if d.get("capitulos"):
+    if d.get("capitulos") and not facebook:
         lineas += ["", "Capítulos:"] + [f"{_mmss(t)} {texto}" for t, texto in d["capitulos"]]
     lineas += [
         "",
         "Resultados provisorios. El extracto oficial se publica en https://www.loteriadesalta.com",
         HORARIOS,
-        "Suscribite para ver el resumen de cada sorteo.",
+        "Seguí la página para ver el resumen de cada sorteo." if facebook
+        else "Suscribite para ver el resumen de cada sorteo.",
         "",
         LEYENDA,
         "",

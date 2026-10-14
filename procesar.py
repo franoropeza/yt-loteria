@@ -19,6 +19,7 @@ from pathlib import Path
 
 import config
 import cronograma
+import facebook
 import telegram
 import twitch
 
@@ -70,6 +71,13 @@ def procesar_vod(vod, subir):
             if not registro["mayores_18"]:
                 registro["avisos"].append("No se pudo marcar +18 por la API: marcarlo en YouTube Studio "
                                           "(Detalles > Público > Restricción de edad) y recién ahí publicarlo")
+            if facebook.activo():
+                try:  # con avisos (incluido el +18 de YouTube) queda sin publicar, igual que en YouTube
+                    publicar = config.FB_PUBLICAR and not registro["avisos"]
+                    registro["facebook"] = facebook.subir(info["compacto"], info, publicar, info["miniatura"])
+                except Exception as e:  # no se reintenta el VOD: volvería a subirlo a YouTube
+                    traceback.print_exc()
+                    registro["avisos"].append(f"No se pudo subir a Facebook: {e}")
         telegram.avisar(telegram.texto_compacto(registro), Path(info["miniatura"]))
         return registro
     finally:
@@ -98,10 +106,13 @@ def resumen(filas):
     """Tabla en Markdown para el resumen de la corrida en GitHub Actions."""
     if not filas:
         return "Sin VODs nuevos.\n"
-    md = ["| VOD | Sorteo | Cabeza | Estado | YouTube | Avisos |", "|---|---|---|---|---|---|"]
+    md = ["| VOD | Sorteo | Cabeza | Estado | YouTube | Facebook | Avisos |", "|---|---|---|---|---|---|---|"]
     for vod_id, r in filas:
+        fb = r.get("facebook") or {}
         md.append(f"| {vod_id} | {r.get('sorteo', '')} {r.get('fecha', '')} | {r.get('cabeza', '')} | {r['estado']} | "
-                  f"{r.get('url', '')} {r.get('privacidad', '')} | {'; '.join(r.get('avisos', [])) or r.get('error', '')} |")
+                  f"{r.get('url', '')} {r.get('privacidad', '')} | "
+                  f"{fb.get('url', '')} {'' if not fb else 'publicado' if fb['publicado'] else 'sin publicar'} | "
+                  f"{'; '.join(r.get('avisos', [])) or r.get('error', '')} |")
     return "\n".join(md) + "\n"
 
 

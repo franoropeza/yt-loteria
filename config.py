@@ -30,6 +30,14 @@ YT_CATEGORIA = "25"  # News & Politics
 # playlists por sorteo, ej: {"MATUTINA": "PLxxxx", "VESPERTINA": "PLyyyy"} (JSON en variable YT_PLAYLISTS)
 YT_PLAYLISTS = os.environ.get("YT_PLAYLISTS", "{}")
 
+# --- Facebook (opcional, ver facebook.py) ---
+FB_ACTIVO = os.environ.get("FB_ACTIVO", "false").lower() == "true"  # interruptor general: false = no sube nada
+FB_PAGE_ID = os.environ.get("FB_PAGE_ID", "")
+FB_PAGE_TOKEN = os.environ.get("FB_PAGE_TOKEN", "")   # token de página permanente
+# false: se sube sin publicar (queda en la biblioteca de videos de la página para revisarlo). Arrancar así.
+FB_PUBLICAR = os.environ.get("FB_PUBLICAR", "false").lower() == "true"
+FB_GRAPH_VERSION = os.environ.get("FB_GRAPH_VERSION", "v24.0")
+
 # avisos por Telegram (opcional, ver telegram.py)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
