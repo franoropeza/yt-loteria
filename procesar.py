@@ -76,6 +76,24 @@ def procesar_vod(vod, subir):
         shutil.rmtree(carpeta, ignore_errors=True)  # el VOD pesa ~1 GB
 
 
+def sorteos_sin_vod(ahora, vods):
+    """Sorteos del cronograma de hoy que ya deberían tener VOD y no lo tienen.
+
+    Solo mira los sorteos cuya hora fue hace 70-95 min: así el aviso sale una sola vez, en la 3.ª revisión
+    (a los 80 min del sorteo), sin tener que guardar estado."""
+    faltan = []
+    for fila in cronograma.cargar() if cronograma.CSV.exists() else []:
+        if fila["fecha"] != ahora.strftime("%d/%m/%Y"):
+            continue
+        hora = dt.datetime.strptime(f"{fila['fecha']} {fila['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
+        if not 70 <= (ahora - hora).total_seconds() / 60 < 95:
+            continue
+        tolerancia = dt.timedelta(minutes=config.TOLERANCIA_HORARIO_MIN)
+        if not any(abs(v["inicio"] - hora) <= tolerancia for v in vods):
+            faltan.append(fila)
+    return faltan
+
+
 def resumen(filas):
     """Tabla en Markdown para el resumen de la corrida en GitHub Actions."""
     if not filas:
@@ -101,6 +119,12 @@ def main():
     estado = cargar_estado()
 
     vods = twitch.ultimos_vods()
+    if a.solo_detectar and not a.vod:
+        for fila in sorteos_sin_vod(ahora, vods):
+            print(f"Sin VOD: {fila['nombre']} {fila['sorteo']} de las {fila['hora']}")
+            telegram.avisar(f"📵 No se encontró en Twitch la transmisión del sorteo {fila['nombre'].title()} "
+                            f"N° {fila['sorteo']} de hoy a las {fila['hora']} hs.\n"
+                            "No hay compacto para ese sorteo: revisar si salió en vivo.")
     if a.vod:
         vods = [v for v in vods if v["id"] == a.vod] or [twitch.info_vod(a.vod)]
     else:
@@ -148,7 +172,7 @@ def main():
     # con Telegram los videos a revisar ya llegan por ahí; sin Telegram, la corrida en rojo manda el mail de GitHub
     a_revisar = any(r.get("avisos") for _, r in hechos) and not telegram.configurado()
     if hubo_error or avisos_generales or a_revisar:
-        sys.exit(1)  # la corrida queda en rojo y GitHub avisa por mail
+        sys.exit(3)  # en rojo (GitHub avisa por mail); el 3 indica que el detalle ya salió por Telegram
 
 
 if __name__ == "__main__":
