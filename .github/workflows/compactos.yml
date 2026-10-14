@@ -81,6 +81,7 @@ jobs:
         env:
           YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
           YT_PRIVACIDAD: ${{ vars.YT_PRIVACIDAD || 'private' }}
+          YT_PLAYLIST: ${{ vars.YT_PLAYLIST || 'PLQw-MqYiPuUc' }}
           YT_PLAYLISTS: ${{ vars.YT_PLAYLISTS || '{}' }}
           FB_ACTIVO: ${{ vars.FB_ACTIVO || 'false' }}
           FB_PAGE_ID: ${{ vars.FB_PAGE_ID }}

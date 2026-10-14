@@ -63,6 +63,7 @@ Repositorio **privado** en una cuenta u organización de la Lotería (no persona
 |---|---|---|
 | Variable | `TWITCH_CANAL` | `loteriadesalta` |
 | Variable | `YT_PRIVACIDAD` | `private` para arrancar; luego `unlisted` o `public` |
+| Variable | `YT_PLAYLIST` | opcional: playlist de todos los compactos (por defecto `PLQw-MqYiPuUc`, "SORTEOS OFICIALES"); vacía = ninguna |
 | Variable | `YT_PLAYLISTS` | opcional: `{"MATUTINA": "PL...", "VESPERTINA": "PL...", ...}` |
 | Secreto | `YT_TOKEN_JSON` | contenido de `token.json` (ver abajo) |
 | Variable | `FB_ACTIVO` | `true` para subir a Facebook; `false` (o sin definir) no sube nada aunque haya credenciales |

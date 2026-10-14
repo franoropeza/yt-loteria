@@ -58,9 +58,8 @@ def metadatos(d, facebook=False):
     fecha = dt.datetime.strptime(d["fecha"], "%d/%m/%Y")
     dia = DIAS[fecha.weekday()]
 
+    # el N° de Tómbola Total va solo en la descripción, no en el título
     titulo = f"Tómbola de Salta {nombre} {d['fecha']} | Sorteo {d['sorteo_numero']} | A la cabeza {d['cabeza']}"
-    if d.get("tombola_total") and len(titulo) + len(d["tombola_total"]) + 20 <= 100:
-        titulo += f" + Tómbola Total {d['tombola_total']}"
 
     lineas = [
         f"Resultados de la Tómbola de Salta, sorteo {nombre} N° {d['sorteo_numero']} "
@@ -139,8 +138,8 @@ def subir(video, datos, privacidad, miniatura=None):
             "privacyStatus": privacidad, "selfDeclaredMadeForKids": False}}).execute()
         privacidad_final = privacidad
 
-    playlists = json.loads(config.YT_PLAYLISTS or "{}")
-    if pl := playlists.get(datos["sorteo_nombre"]):
+    playlists = [config.YT_PLAYLIST, json.loads(config.YT_PLAYLISTS or "{}").get(datos["sorteo_nombre"])]
+    for pl in dict.fromkeys(p for p in playlists if p):  # sin repetir
         yt.playlistItems().insert(part="snippet", body={"snippet": {
             "playlistId": pl, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute()
     return {"video_id": video_id, "url": f"https://youtu.be/{video_id}", "titulo": titulo,

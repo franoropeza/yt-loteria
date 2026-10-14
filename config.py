@@ -27,7 +27,9 @@ YT_TOKEN_ARCHIVO = BASE / "token.json"                 # alternativa local
 # private | unlisted | public. Arrancar en private/unlisted hasta confiar en el proceso.
 YT_PRIVACIDAD = os.environ.get("YT_PRIVACIDAD", "private")
 YT_CATEGORIA = "25"  # News & Politics
-# playlists por sorteo, ej: {"MATUTINA": "PLxxxx", "VESPERTINA": "PLyyyy"} (JSON en variable YT_PLAYLISTS)
+# playlist a la que va cada compacto ("SORTEOS OFICIALES"); vacía = ninguna
+YT_PLAYLIST = os.environ.get("YT_PLAYLIST", "PLQw-MqYiPuUc")
+# playlists adicionales por sorteo, ej: {"MATUTINA": "PLxxxx", "VESPERTINA": "PLyyyy"} (JSON en variable YT_PLAYLISTS)
 YT_PLAYLISTS = os.environ.get("YT_PLAYLISTS", "{}")
 
 # --- Facebook (opcional, ver facebook.py) ---
