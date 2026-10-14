@@ -89,7 +89,8 @@ def revisar_locucion(segmentos, desde, hasta, t_cab, cabeza_ocr):
         avisos.append(f"El locutor menciona términos de riesgo en el compacto: {', '.join(riesgo)}")
     # la cabeza va en el título: el número del tablero tiene que coincidir con el que cantó el locutor
     alrededor = " ".join(s["text"] for s in segmentos if t_cab - 30 <= s["start"] <= t_cab + 20)
-    if cabeza_ocr and not any(cabeza_ocr in n for n in numeros_cantados(alrededor)):
+    # sin ceros a la izquierda: el locutor puede decir "ochocientos tres" y Whisper escribir "803" para 0803
+    if cabeza_ocr and not any(cabeza_ocr.lstrip("0") in n for n in numeros_cantados(alrededor)):
         avisos.append(f"La cabeza del tablero ({cabeza_ocr}) no coincide con la que cantó el locutor")
     return avisos
 
@@ -141,6 +142,15 @@ def leer_tablero(png):
     datos["fecha"] = re.sub(r"[^\d/]", "", datos["fecha"])
     datos["hora"] = re.sub(r"[^\d:]", "", datos["hora"])[:5]
     datos["cabeza"] = re.sub(r"\D", "", datos["cabeza"])
+    # la cabeza está en rojo: separarla por color es más fiable que la escala de grises
+    x, y, w, h = CAMPOS_OCR["cabeza"]
+    rgb = np.asarray(tablero.convert("RGB").crop((x, y, x + w, y + h))).astype(int)
+    rojo = (rgb[..., 0] - np.maximum(rgb[..., 1], rgb[..., 2])) > 60
+    img = ImageOps.expand(Image.fromarray(np.where(rojo, 0, 255).astype(np.uint8)).resize((w * 3, h * 3)), 20, fill=255)
+    cabeza = re.sub(r"\D", "", pytesseract.image_to_string(
+        img, config="--psm 7 -c tessedit_char_whitelist=0123456789"))
+    if re.fullmatch(r"\d{4}", cabeza):
+        datos["cabeza"] = cabeza
     return datos
 
 
