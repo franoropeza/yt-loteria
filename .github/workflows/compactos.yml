@@ -11,6 +11,9 @@ on:
       vod:
         description: "ID de un VOD puntual (vacío = buscar nuevos)"
         required: false
+      respaldo:
+        description: "Compacto de respaldo con el extracto oficial de un sorteo: DD/MM/AAAA HH:MM"
+        required: false
       sin_subir:
         description: "Armar sin subir a YouTube"
         type: boolean
@@ -42,10 +45,11 @@ jobs:
       - id: detectar
         env:
           VOD: ${{ inputs.vod }}
+          RESPALDO: ${{ inputs.respaldo }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          if [ -n "$VOD" ]; then echo "pendientes=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$VOD$RESPALDO" ]; then echo "pendientes=true" >> "$GITHUB_OUTPUT"
           else python procesar.py --solo-detectar; fi
       - name: Avisar por Telegram si la corrida falló
         if: failure()
@@ -90,10 +94,12 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           VOD: ${{ inputs.vod }}
+          RESPALDO: ${{ inputs.respaldo }}
           SIN_SUBIR: ${{ inputs.sin_subir }}
         run: |
           ARGS=()
           [ -n "$VOD" ] && ARGS+=(--vod "$VOD")
+          [ -n "$RESPALDO" ] && ARGS+=(--respaldo "$RESPALDO")
           [ "$SIN_SUBIR" = "true" ] && ARGS+=(--sin-subir)
           python procesar.py "${ARGS[@]}" || { c=$?; echo "codigo=$c" >> "$GITHUB_OUTPUT"; exit $c; }
       - name: Guardar estado en el repo

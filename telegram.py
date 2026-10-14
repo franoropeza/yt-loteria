@@ -63,4 +63,12 @@ def texto_error(vod, registro):
     return (f"❌ No se pudo armar el compacto de {vod['titulo']} (VOD {vod['id']})\n"
             f"{registro.get('error', '')}\n"
             f"Intento {registro['intentos']} de {config.MAX_INTENTOS}"
+            + (" · se reintenta en la próxima corrida" if registro["estado"] == "error"
+               else " · abandonado: se arma un compacto de respaldo con el extracto oficial"))
+
+
+def texto_error_respaldo(fila, registro):
+    return (f"❌ No se pudo armar el compacto de respaldo de {fila['nombre'].title()} N° {fila['sorteo']} "
+            f"({fila['fecha']} {fila['hora']})\n{registro.get('error', '')}\n"
+            f"Intento {registro['intentos']} de {config.MAX_INTENTOS}"
             + (" · se reintenta en la próxima corrida" if registro["estado"] == "error" else " · abandonado"))

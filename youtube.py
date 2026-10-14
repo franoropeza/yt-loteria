@@ -67,6 +67,8 @@ def metadatos(d, facebook=False):
         f"A la cabeza: {d['cabeza']}",
         "",
     ]
+    if d.get("extracto"):  # compacto de respaldo: los 20 números de la API oficial
+        lineas += ["Extracto oficial:"] + [f"{i:>2}. {n}" for i, n in enumerate(d["extracto"], 1)] + [""]
     if d.get("changuita"):
         lineas.append(f"La Changuita: sorteo N° {d['changuita']}.")
     if d.get("tombola_total"):
@@ -75,7 +77,8 @@ def metadatos(d, facebook=False):
         lineas += ["", "Capítulos:"] + [f"{_mmss(t)} {texto}" for t, texto in d["capitulos"]]
     lineas += [
         "",
-        "Resultados provisorios. El extracto oficial se publica en https://www.loteriadesalta.com",
+        "Extracto oficial publicado en https://www.loteriadesalta.com" if d.get("extracto")
+        else "Resultados provisorios. El extracto oficial se publica en https://www.loteriadesalta.com",
         HORARIOS,
         "Seguí la página para ver el resumen de cada sorteo." if facebook
         else "Suscribite para ver el resumen de cada sorteo.",

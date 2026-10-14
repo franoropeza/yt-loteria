@@ -45,6 +45,16 @@ Vista previa: `python youtube.py salida/compacto_....json`.
 Si falla (no se encontró "a la cabeza", error de red, etc.) se reintenta en las próximas corridas,
 hasta 3 veces.
 
+### Compacto de respaldo
+
+Si un sorteo del cronograma se queda sin compacto (no hubo VOD en Twitch o el VOD se abandonó después de
+3 intentos), desde los 70 min del sorteo se arma un video de ~24 s con el extracto oficial de la API de la
+Lotería (`LOTERIA_API_EXTRACTO`): la misma intro y una placa con la cabeza y
+los 20 números, con la cortina de fondo. Si el extracto todavía no está publicado, se vuelve a mirar en la
+próxima corrida (hasta 24 h después del sorteo). Siempre se sube **privado** para revisarlo; la descripción
+incluye los 20 números. Para forzarlo: Run workflow con "respaldo" = `14/10/2026 15:00`, o localmente
+`python respaldo.py 14/10/2026 15:00` (arma sin subir).
+
 ### Cronograma
 
 `cronograma.csv` se genera a partir del PDF de <https://www.loteriadesalta.com/puntosdeventa/cronograma.pdf>.

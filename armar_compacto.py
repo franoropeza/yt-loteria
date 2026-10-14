@@ -184,6 +184,22 @@ def ruta_ff(p):
     return str(p).replace("\\", "/").replace(":", "\\:")
 
 
+def filtro_intro(datos):
+    """Filtro de FFmpeg de la intro (entradas 0 = fondo, 1 = logo): fondo fijo + logo + título
+    (y Tómbola Total si corresponde). Sale como [v0]."""
+    fuente = ruta_ff(config.FUENTE)
+    titulo = f"{datos['sorteo_nombre']}  ·  SORTEO {datos['sorteo_numero']}  ·  {datos['fecha']}"
+    intro = (f"[0:v]scale=1920:1080,setsar=1,fps=30[fondo];"
+             f"[1:v]scale=760:-1[logo];[fondo][logo]overlay=x=(W-w)/2:y=300,"
+             f"drawtext=fontfile='{fuente}':text='{texto_ff(titulo)}':fontsize=60:fontcolor=white:"
+             f"x=(w-tw)/2:y=h*0.62:alpha='min(1,max(0,(t-0.6)*2))':shadowcolor=black@0.6:shadowx=3:shadowy=3")
+    if datos.get("tombola_total"):
+        intro += (f",drawtext=fontfile='{fuente}':text='{texto_ff('+ TÓMBOLA TOTAL ' + datos['tombola_total'])}':"
+                  f"fontsize=52:fontcolor=0xFFD100:x=(w-tw)/2:y=h*0.62+90:alpha='min(1,max(0,(t-1.0)*2))':"
+                  f"shadowcolor=black@0.6:shadowx=3:shadowy=3")
+    return intro + f",trim=duration={config.INTRO_DUR},setpts=PTS-STARTPTS,format=yuv420p[v0]"
+
+
 def armar(vod, segmentos, salida, fila_cronograma=None):
     """Arma el compacto. Devuelve un dict con los datos del sorteo, la ruta del video y los avisos."""
     salida.mkdir(parents=True, exist_ok=True)
@@ -230,20 +246,8 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
                  "-stream_loop", "-1", "-i", str(config.CORTINA)]
     i_mus = n + 1  # la intro usa 2 entradas (fondo + logo)
 
-    fuente = ruta_ff(config.FUENTE)
-    titulo = f"{datos['sorteo_nombre']}  ·  SORTEO {datos['sorteo_numero']}  ·  {datos['fecha']}"
     norm = f"scale=1920:1080,setsar=1,fps=30,{EN_VIVO},format=yuv420p"
-    f = []
-    # intro: fondo fijo + logo + título (y Tómbola Total si corresponde)
-    intro = (f"[0:v]scale=1920:1080,setsar=1,fps=30[fondo];"
-             f"[1:v]scale=760:-1[logo];[fondo][logo]overlay=x=(W-w)/2:y=300,"
-             f"drawtext=fontfile='{fuente}':text='{texto_ff(titulo)}':fontsize=60:fontcolor=white:"
-             f"x=(w-tw)/2:y=h*0.62:alpha='min(1,max(0,(t-0.6)*2))':shadowcolor=black@0.6:shadowx=3:shadowy=3")
-    if datos.get("tombola_total"):
-        intro += (f",drawtext=fontfile='{fuente}':text='{texto_ff('+ TÓMBOLA TOTAL ' + datos['tombola_total'])}':"
-                  f"fontsize=52:fontcolor=0xFFD100:x=(w-tw)/2:y=h*0.62+90:alpha='min(1,max(0,(t-1.0)*2))':"
-                  f"shadowcolor=black@0.6:shadowx=3:shadowy=3")
-    f.append(intro + f",trim=duration={config.INTRO_DUR},setpts=PTS-STARTPTS,format=yuv420p[v0]")
+    f = [filtro_intro(datos)]
     f.append(f"anullsrc=r=48000:cl=stereo,atrim=0:{config.INTRO_DUR}[a0]")
     k, entrada = 1, 2
     for _ in range(2 if con_bienvenida else 1):  # tramos del VOD
