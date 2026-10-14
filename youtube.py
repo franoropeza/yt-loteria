@@ -61,7 +61,7 @@ def metadatos(d):
         titulo += f" + Tómbola Total {d['tombola_total']}"
 
     lineas = [
-        f"Resultados de la Tómbola de Salta (Quiniela de Salta), sorteo {nombre} N° {d['sorteo_numero']} "
+        f"Resultados de la Tómbola de Salta, sorteo {nombre} N° {d['sorteo_numero']} "
         f"del {dia} {d['fecha']} a las {d['hora']} hs.",
         f"A la cabeza: {d['cabeza']}",
         "",
