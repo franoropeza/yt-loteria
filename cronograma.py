@@ -12,7 +12,6 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
-import pdfplumber
 
 URL = "https://www.loteriadesalta.com/puntosdeventa/cronograma.pdf"
 CSV = Path(__file__).resolve().parent / "cronograma.csv"
@@ -26,6 +25,8 @@ FECHA_SOLA = re.compile(r"^(\d{2}/\d{2}/\d{4}) \d{2}/\d{2}/\d{4}$")  # fecha + c
 
 def leer_pdf(ruta):
     """Devuelve una lista de dicts: fecha, hora, nombre, sorteo, changuita, tombola_total."""
+    import pdfplumber  # solo al leer el PDF: la etapa de detección no lo instala
+
     filas, fechas = [], []
     with pdfplumber.open(ruta) as pdf:
         for pagina in pdf.pages:
