@@ -1,14 +1,11 @@
 name: Compactos de sorteos
 
 on:
-  schedule:
-    # Horarios en UTC (Argentina = UTC-3). Cada sorteo dura ~25 min desde la hora:
-    # se revisa a los 35, 55 y 80 min. GitHub puede demorar los cron programados unos minutos.
-    - cron: "35,55 15,18,21 * * *"   # 12:00, 15:00 y 18:00 ART
-    - cron: "20 16,19,22 * * *"
-    - cron: "35,55 0 * * *"          # 21:00 ART
-    - cron: "20 1 * * *"
-    - cron: "5,25,50 2 * * *"        # 22:30 ART
+  # Las corridas las dispara cron-job.org (zona America/Argentina/Salta) llamando a la API
+  # .../actions/workflows/compactos.yml/dispatches: el cron propio de GitHub no disparaba a horario.
+  #   35,55 12,15,18,21 * * *   1.ª y 2.ª revisión de los sorteos de 12, 15, 18 y 21 h
+  #   20 13,16,19,22 * * *      3.ª revisión
+  #   5,25,50 23 * * *          La Revancha (22:30)
   workflow_dispatch:
     inputs:
       vod:

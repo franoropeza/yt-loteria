@@ -9,7 +9,7 @@ baja sola cuando habla el locutor.
 
 ## Cómo funciona
 
-1. **Detectar** (GitHub Actions, después de cada sorteo): lista los últimos VODs del canal con `yt-dlp`
+1. **Detectar** (GitHub Actions, disparado por cron-job.org a los 35, 55 y 80 min de cada sorteo; ver el workflow): lista los últimos VODs del canal con `yt-dlp`
    y se fija cuáles faltan en `estado/procesados.json`. Si no hay nada nuevo termina en ~30 s.
 2. **Procesar** (solo si hay VODs nuevos), por cada VOD:
    - Lo cruza con el cronograma oficial por horario de inicio (`cronograma.csv`).
