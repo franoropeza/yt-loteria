@@ -65,6 +65,15 @@ Repositorio **privado** en una cuenta u organización de la Lotería (no persona
 | Variable | `YT_PRIVACIDAD` | `private` para arrancar; luego `unlisted` o `public` |
 | Variable | `YT_PLAYLISTS` | opcional: `{"MATUTINA": "PL...", "VESPERTINA": "PL...", ...}` |
 | Secreto | `YT_TOKEN_JSON` | contenido de `token.json` (ver abajo) |
+| Secreto | `TELEGRAM_TOKEN` | opcional: token del bot de avisos (ver abajo) |
+| Secreto | `TELEGRAM_CHAT_ID` | opcional: chat donde llegan los avisos |
+
+**Avisos por Telegram (opcional):** con estos dos secretos llega un mensaje por cada compacto subido (miniatura,
+cabeza, avisos y link para revisarlo y publicarlo en YouTube Studio) y por cada falla. Con Telegram configurado,
+los videos con avisos ya no ponen la corrida en rojo (el mail de GitHub queda solo para fallas).
+1. En Telegram, hablarle a **@BotFather** → `/newbot` → copiar el token.
+2. Mandarle cualquier mensaje al bot nuevo (o agregarlo a un grupo), abrir
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` y copiar el número de `"chat":{"id": ...}`.
 
 ### 3. Token de YouTube
 En una PC con el `client_secret.json` del proyecto de Google Cloud:

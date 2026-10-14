@@ -30,6 +30,10 @@ YT_CATEGORIA = "25"  # News & Politics
 # playlists por sorteo, ej: {"MATUTINA": "PLxxxx", "VESPERTINA": "PLyyyy"} (JSON en variable YT_PLAYLISTS)
 YT_PLAYLISTS = os.environ.get("YT_PLAYLISTS", "{}")
 
+# avisos por Telegram (opcional, ver telegram.py)
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
 # --- Armado del video ---
 FUENTE = ASSETS / "Poppins-Bold.ttf"
 FONDO_INTRO = ASSETS / "fondo.png"

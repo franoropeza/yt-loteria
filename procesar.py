@@ -15,9 +15,11 @@ import os
 import shutil
 import sys
 import traceback
+from pathlib import Path
 
 import config
 import cronograma
+import telegram
 import twitch
 
 MAX_ANTIGUEDAD_HORAS = 36  # no procesar VODs viejos (evita subir el historial la primera vez)
@@ -68,6 +70,7 @@ def procesar_vod(vod, subir):
             if not registro["mayores_18"]:
                 registro["avisos"].append("No se pudo marcar +18 por la API: marcarlo en YouTube Studio "
                                           "(Detalles > Público > Restricción de edad) y recién ahí publicarlo")
+        telegram.avisar(telegram.texto_compacto(registro), Path(info["miniatura"]))
         return registro
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)  # el VOD pesa ~1 GB
@@ -127,6 +130,8 @@ def main():
                         "error": f"{type(e).__name__}: {e}"}
         registro.update(intentos=previo.get("intentos", 0) + 1, titulo_twitch=vod["titulo"],
                         actualizado=dt.datetime.now(config.ARG).isoformat(timespec="seconds"))
+        if registro["estado"] in ("error", "abandonado"):
+            telegram.avisar(telegram.texto_error(vod, registro))
         if not a.sin_subir:  # las pruebas no marcan el VOD como procesado
             estado[vod["id"]] = registro
             guardar_estado(estado)  # después de cada VOD, por si la corrida se corta
@@ -138,7 +143,10 @@ def main():
     if destino := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(destino, "a", encoding="utf-8") as f:
             f.write("## Compactos de sorteos\n\n" + texto)
-    a_revisar = any(r.get("avisos") for _, r in hechos)
+    for aviso in avisos_generales:
+        telegram.avisar(f"⚠️ {aviso}")
+    # con Telegram los videos a revisar ya llegan por ahí; sin Telegram, la corrida en rojo manda el mail de GitHub
+    a_revisar = any(r.get("avisos") for _, r in hechos) and not telegram.configurado()
     if hubo_error or avisos_generales or a_revisar:
         sys.exit(1)  # la corrida queda en rojo y GitHub avisa por mail
 
