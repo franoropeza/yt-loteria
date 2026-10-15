@@ -9,6 +9,7 @@ Uso local:
   python armar_compacto.py VOD.mp4 TRANSCRIPCION.json [--salida carpeta/]
 """
 import argparse
+from collections import Counter
 import json
 import re
 import shutil
@@ -81,18 +82,18 @@ def numeros_cantados(texto):
     return numeros | ({actual} if actual else set())
 
 
-def revisar_locucion(segmentos, desde, hasta, t_cab, cabeza_ocr):
+def revisar_locucion(segmentos, desde, hasta):
     """Controles sobre lo que dice el locutor. Devuelve una lista de avisos."""
     avisos = []
     tramo = " ".join(s["text"] for s in segmentos if desde - 2 <= s["start"] <= hasta)
     if riesgo := sorted({t for t in config.TERMINOS_RIESGO if t in sin_tildes(tramo)}):
         avisos.append(f"El locutor menciona términos de riesgo en el compacto: {', '.join(riesgo)}")
-    # la cabeza va en el título: el número del tablero tiene que coincidir con el que cantó el locutor
-    alrededor = " ".join(s["text"] for s in segmentos if t_cab - 30 <= s["start"] <= t_cab + 20)
-    # sin ceros a la izquierda: el locutor puede decir "ochocientos tres" y Whisper escribir "803" para 0803
-    if cabeza_ocr and not any(cabeza_ocr.lstrip("0") in n for n in numeros_cantados(alrededor)):
-        avisos.append(f"La cabeza del tablero ({cabeza_ocr}) no coincide con la que cantó el locutor")
     return avisos
+
+
+def cantados_en_cabeza(segmentos, t_cab):
+    """Números que dijo el locutor alrededor de "a la cabeza"."""
+    return numeros_cantados(" ".join(s["text"] for s in segmentos if t_cab - 30 <= s["start"] <= t_cab + 20))
 
 
 def buscar_tablero(vod, desde):
@@ -142,16 +143,37 @@ def leer_tablero(png):
     datos["fecha"] = re.sub(r"[^\d/]", "", datos["fecha"])
     datos["hora"] = re.sub(r"[^\d:]", "", datos["hora"])[:5]
     datos["cabeza"] = re.sub(r"\D", "", datos["cabeza"])
-    # la cabeza está en rojo: separarla por color es más fiable que la escala de grises
-    x, y, w, h = CAMPOS_OCR["cabeza"]
-    rgb = np.asarray(tablero.convert("RGB").crop((x, y, x + w, y + h))).astype(int)
-    rojo = (rgb[..., 0] - np.maximum(rgb[..., 1], rgb[..., 2])) > 60
-    img = ImageOps.expand(Image.fromarray(np.where(rojo, 0, 255).astype(np.uint8)).resize((w * 3, h * 3)), 20, fill=255)
-    cabeza = re.sub(r"\D", "", pytesseract.image_to_string(
-        img, config="--psm 7 -c tessedit_char_whitelist=0123456789"))
-    if re.fullmatch(r"\d{4}", cabeza):
-        datos["cabeza"] = cabeza
     return datos
+
+
+# (umbral de rojo, escala, psm): una sola lectura de Tesseract no es fiable con algunas cifras; se vota entre
+# estas tres combinaciones
+LECTURAS_CABEZA = [(30, 3, 7), (60, 1, 7), (60, 2, 8)]
+
+
+def leer_cabeza(tablero):
+    """Lecturas de 4 cifras de la cabeza (en rojo) en un tablero recortado; puede devolver ninguna."""
+    x, y, w, h = CAMPOS_OCR["cabeza"]
+    rgb = np.asarray(Image.open(tablero).convert("RGB").crop((x, y, x + w, y + h))).astype(int)
+    rojo = rgb[..., 0] - np.maximum(rgb[..., 1], rgb[..., 2])
+    lecturas = []
+    for umbral, escala, psm in LECTURAS_CABEZA:
+        img = Image.fromarray(np.where(rojo > umbral, 0, 255).astype(np.uint8)).resize((w * escala, h * escala))
+        texto = pytesseract.image_to_string(ImageOps.expand(img, 20, fill=255),
+                                            config=f"--psm {psm} -c tessedit_char_whitelist=0123456789")
+        if re.fullmatch(r"\d{4}", cifras := re.sub(r"\D", "", texto)):
+            lecturas.append(cifras)
+    return lecturas
+
+
+def elegir_cabeza(lecturas, cantados):
+    """La lectura más votada entre las que cantó el locutor; si no cantó ninguna, la más votada.
+    Devuelve (cabeza, confirmada por el locutor)."""
+    votos = Counter(lecturas).most_common()
+    for cabeza, _ in votos:
+        if any(cabeza.lstrip("0") in n for n in cantados):
+            return cabeza, True
+    return (votos[0][0] if votos else ""), False
 
 
 def combinar_datos(ocr, fila):
@@ -210,7 +232,15 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     datos_png, cierre_png = tmp / "datos.png", tmp / "cierre.png"
     capturar(vod, t_datos, datos_png, recorte=TABLERO)
     capturar(vod, t_tab, cierre_png)
-    datos, avisos = combinar_datos(leer_tablero(datos_png), fila_cronograma)
+    capturar(vod, t_tab, cierre_tab_png := tmp / "cierre_tablero.png", recorte=TABLERO)
+    ocr = leer_tablero(datos_png)
+    # la cabeza va en el título: se vota entre varias lecturas de los dos tableros y manda la que cantó el locutor
+    lecturas = leer_cabeza(datos_png) + leer_cabeza(cierre_tab_png)
+    ocr["cabeza"], confirmada = elegir_cabeza(lecturas, cantados_en_cabeza(segmentos, t_cab))
+    datos, avisos = combinar_datos(ocr, fila_cronograma)
+    if ocr["cabeza"] and not confirmada:
+        avisos.append(f"La cabeza del tablero ({ocr['cabeza']}) no coincide con la que cantó el locutor "
+                      f"(lecturas: {', '.join(lecturas)})")
     if aviso_cabeza:
         avisos.append(aviso_cabeza)
     if cartel_tt and not datos["tombola_total"]:
@@ -225,7 +255,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     piezas = [config.INTRO_DUR] + ([b_dur] if con_bienvenida else []) + [c_dur, config.CIERRE_DUR]
     n = len(piezas)
     total = sum(piezas) - config.FUNDIDO * (n - 1)
-    avisos += revisar_locucion(segmentos, b_ini if con_bienvenida else c_ini, c_ini + c_dur, t_cab, datos["cabeza"])
+    avisos += revisar_locucion(segmentos, b_ini if con_bienvenida else c_ini, c_ini + c_dur)
 
     # capítulos de YouTube (en segundos dentro del compacto); cada uno tiene que durar 10 s o más
     ini_cabeza = total - config.CIERRE_DUR - c_dur + config.FUNDIDO

@@ -14,7 +14,9 @@ baja sola cuando habla el locutor.
 2. **Procesar** (solo si hay VODs nuevos), por cada VOD:
    - Lo cruza con el cronograma oficial por horario de inicio (`cronograma.csv`).
    - Lo descarga en 1080p y transcribe el audio con Whisper hasta encontrar la primera "cabeza".
-   - Busca el tablero de resultados y lee con OCR el número de sorteo, la fecha y la cabeza (control).
+   - Busca el tablero de resultados y lee con OCR el número de sorteo, la fecha y la cabeza. La cabeza se lee
+     varias veces (primer tablero y tablero final, tres preprocesados) y se vota; si el locutor cantó una de las
+     lecturas, manda esa.
    - Arma el video con FFmpeg y lo sube a YouTube con título, descripción y miniatura (el tablero).
    - Guarda el resultado en `estado/procesados.json` (se commitea al repo).
 
