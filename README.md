@@ -54,7 +54,8 @@ Si un sorteo del cronograma se queda sin compacto (no hubo VOD en Twitch o el VO
 Lotería (`LOTERIA_API_EXTRACTO`): la misma intro y una placa con la cabeza y
 los 20 números, con la cortina de fondo. Si el extracto todavía no está publicado, se vuelve a mirar en la
 próxima corrida (hasta 24 h después del sorteo). Siempre se sube **privado** para revisarlo; la descripción
-incluye los 20 números. Para forzarlo: Run workflow con "respaldo" = `14/10/2026 15:00`, o localmente
+incluye los 20 números. Es solo para YouTube: no se sube a Facebook (ahí el extracto se publica aparte, como
+imagen). Para forzarlo: Run workflow con "respaldo" = `14/10/2026 15:00`, o localmente
 `python respaldo.py 14/10/2026 15:00` (arma sin subir).
 
 ### Cronograma

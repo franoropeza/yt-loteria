@@ -93,7 +93,8 @@ def publicar(info, subir):
         if not registro["mayores_18"]:
             registro["avisos"].append("No se pudo marcar +18 por la API: marcarlo en YouTube Studio "
                                       "(Detalles > Público > Restricción de edad) y recién ahí publicarlo")
-        if facebook.activo(info["sorteo_nombre"]):
+        # el respaldo (con extracto) es solo para YouTube: en Facebook el extracto se publica como imagen aparte
+        if not info.get("extracto") and facebook.activo(info["sorteo_nombre"]):
             try:  # con avisos de contenido queda sin publicar para revisarlo
                 registro["facebook"] = facebook.subir(info["compacto"], info, fb_publicar, info["miniatura"])
             except Exception as e:  # no se reintenta: volvería a subirlo a YouTube
