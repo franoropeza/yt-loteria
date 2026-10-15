@@ -37,10 +37,12 @@ def leer_pdf(ruta):
                     filas.append({"hora": m[4], "sorteo": m[2], "changuita": m[3], "tombola_total": m[5] or ""})
                 elif m := FECHA_SOLA.match(linea.strip()):
                     fechas.append(m[1])
-    # la fecha aparece una sola vez por dia, en medio de su grupo: cada dia arranca con el sorteo de las 12:00
+    # la fecha aparece una sola vez por dia, en medio de su grupo: arranca un dia nuevo cuando la hora no avanza
+    # (no siempre con el de las 12:00: un feriado puede tener horario reducido). Los dias sin sorteo (25/12, 1/1)
+    # no figuran en el PDF y quedan fuera del cronograma.
     dias = []
     for f in filas:
-        if f["hora"] == "12:00" or not dias:
+        if not dias or f["hora"] <= dias[-1][-1]["hora"]:
             dias.append([])
         dias[-1].append(f)
     if len(dias) != len(fechas):

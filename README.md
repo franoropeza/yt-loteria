@@ -61,7 +61,8 @@ incluye los 20 números. Para forzarlo: Run workflow con "respaldo" = `14/10/202
 
 `cronograma.csv` se genera a partir del PDF de <https://www.loteriadesalta.com/puntosdeventa/cronograma.pdf>.
 No se descarga en cada corrida: solo si falta el mes en curso o, desde el día 25, una vez por día hasta que
-aparezca el mes siguiente. Los nombres salen del horario: 12:00 Matutina, 15:00 Vespertina, 18:00 Extra,
+aparezca el mes siguiente. Si una fecha no figura en el PDF es porque ese día no hay sorteo (por ejemplo 25/12 y 1/1):
+no se espera VOD, no se avisa "sin VOD" y no se arma respaldo. Los nombres salen del horario: 12:00 Matutina, 15:00 Vespertina, 18:00 Extra,
 21:00 Nocturna, 22:30 La Revancha.
 
 ## Puesta en marcha
