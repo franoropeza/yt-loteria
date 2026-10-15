@@ -7,3 +7,4 @@ transcripciones/
 *.wav
 token.json
 client_secret*.json
+.env*
