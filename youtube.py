@@ -75,14 +75,16 @@ def metadatos(d, facebook=False):
         lineas.append(f"Tómbola Total: sorteo N° {d['tombola_total']}.")
     if d.get("capitulos") and not facebook:
         lineas += ["", "Capítulos:"] + [f"{_mmss(t)} {texto}" for t, texto in d["capitulos"]]
-    # YouTube no deja poner enlaces en la descripción: el sitio y Twitch se mencionan sin URL
+    # YouTube no deja poner enlaces en la descripción: el sitio y Twitch se mencionan sin URL (en Facebook, sí)
+    sitio = "https://www.loteriadesalta.com" if facebook else "nuestro sitio web oficial."  # sin punto pegado a la URL
     lineas += [
         "",
-        "Extracto oficial publicado en nuestro sitio web oficial." if d.get("extracto")
-        else "Resultados provisorios. El extracto oficial se publica en nuestro sitio web oficial.",
+        f"Extracto oficial publicado en {sitio}" if d.get("extracto")
+        else f"Resultados provisorios. El extracto oficial se publica en {sitio}",
     ]
     if not d.get("extracto"):  # el respaldo se arma justamente cuando no hay sorteo en Twitch
-        lineas.append("Para ver el sorteo completo, visitá nuestro canal oficial de Twitch.")
+        lineas.append(f"Sorteo completo en vivo: https://www.twitch.tv/{config.TWITCH_CANAL or 'loteriadesalta'}"
+                      if facebook else "Para ver el sorteo completo, visitá nuestro canal oficial de Twitch.")
     lineas += [
         HORARIOS,
         "Seguí la página para ver el resumen de cada sorteo." if facebook

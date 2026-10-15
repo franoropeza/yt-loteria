@@ -91,6 +91,7 @@ jobs:
           FB_PAGE_ID: ${{ vars.FB_PAGE_ID }}
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           FB_PUBLICAR: ${{ vars.FB_PUBLICAR || 'false' }}
+          FB_SORTEOS: ${{ vars.FB_SORTEOS || 'VESPERTINA,NOCTURNA' }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           VOD: ${{ inputs.vod }}

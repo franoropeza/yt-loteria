@@ -82,6 +82,7 @@ Repositorio **privado** en una cuenta u organización de la Lotería (no persona
 | Variable | `FB_ACTIVO` | `true` para subir a Facebook; `false` (o sin definir) no sube nada aunque haya credenciales |
 | Variable | `FB_PAGE_ID` | opcional: ID de la página de Facebook (ver abajo) |
 | Variable | `FB_PUBLICAR` | `false` para arrancar (sube sin publicar); `true` para publicar directo |
+| Variable | `FB_SORTEOS` | opcional: sorteos que van a Facebook (por defecto `VESPERTINA,NOCTURNA`; vacía = todos) |
 | Secreto | `FB_PAGE_TOKEN` | opcional: token de página permanente de Facebook |
 | Secreto | `TELEGRAM_TOKEN` | opcional: token del bot de avisos (ver abajo) |
 | Secreto | `TELEGRAM_CHAT_ID` | opcional: chat donde llegan los avisos |
@@ -93,8 +94,10 @@ los videos con avisos ya no ponen la corrida en rojo (el mail de GitHub queda so
 2. Mandarle cualquier mensaje al bot nuevo (o agregarlo a un grupo), abrir
    `https://api.telegram.org/bot<TOKEN>/getUpdates` y copiar el número de `"chat":{"id": ...}`.
 
-**Facebook (opcional):** con `FB_ACTIVO=true`, `FB_PAGE_ID` y `FB_PAGE_TOKEN` cada compacto subido a YouTube se sube también a la
-página, con el mismo título y descripción. Con `FB_PUBLICAR=false`, o si el compacto tiene avisos, queda sin publicar
+**Facebook (opcional):** con `FB_ACTIVO=true`, `FB_PAGE_ID` y `FB_PAGE_TOKEN` cada compacto subido a YouTube de los sorteos
+de `FB_SORTEOS` se sube también a la página, con el mismo título; la descripción lleva los enlaces a loteriadesalta.com
+y al canal de Twitch (YouTube no los permite). Con `FB_PUBLICAR=false`, o si el compacto tiene avisos (salvo el de +18
+de YouTube: en Facebook la restricción de edad es de toda la página), queda sin publicar
 en la biblioteca de videos de la página (Meta Business Suite → Contenido) para revisarlo. Si falla Facebook, el
 compacto no se reintenta (ya está en YouTube): llega como aviso.
 - El token tiene que ser **de página** y permanente, con `pages_manage_posts` y `pages_read_engagement`.

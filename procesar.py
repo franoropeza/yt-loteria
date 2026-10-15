@@ -88,12 +88,13 @@ def publicar(info, subir):
         # con avisos se sube privado para revisarlo a mano, sin importar la configuración
         privacidad = "private" if info["avisos"] else config.YT_PRIVACIDAD
         registro.update(youtube.subir(info["compacto"], info, privacidad, info["miniatura"]), estado="ok")
+        # el +18 de YouTube no frena a Facebook: ahí la restricción de edad es de toda la página
+        fb_publicar = config.FB_PUBLICAR and not registro["avisos"]
         if not registro["mayores_18"]:
             registro["avisos"].append("No se pudo marcar +18 por la API: marcarlo en YouTube Studio "
                                       "(Detalles > Público > Restricción de edad) y recién ahí publicarlo")
-        if facebook.activo():
-            try:  # con avisos (incluido el +18 de YouTube) queda sin publicar, igual que en YouTube
-                fb_publicar = config.FB_PUBLICAR and not registro["avisos"]
+        if facebook.activo(info["sorteo_nombre"]):
+            try:  # con avisos de contenido queda sin publicar para revisarlo
                 registro["facebook"] = facebook.subir(info["compacto"], info, fb_publicar, info["miniatura"])
             except Exception as e:  # no se reintenta: volvería a subirlo a YouTube
                 traceback.print_exc()

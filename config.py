@@ -38,6 +38,8 @@ FB_PAGE_ID = os.environ.get("FB_PAGE_ID", "")
 FB_PAGE_TOKEN = os.environ.get("FB_PAGE_TOKEN", "")   # token de página permanente
 # false: se sube sin publicar (queda en la biblioteca de videos de la página para revisarlo). Arrancar así.
 FB_PUBLICAR = os.environ.get("FB_PUBLICAR", "false").lower() == "true"
+# sorteos que se suben a Facebook, separados por coma (vacío = todos)
+FB_SORTEOS = [s.strip().upper() for s in os.environ.get("FB_SORTEOS", "VESPERTINA,NOCTURNA").split(",") if s.strip()]
 FB_GRAPH_VERSION = os.environ.get("FB_GRAPH_VERSION", "v24.0")
 
 # avisos por Telegram (opcional, ver telegram.py)

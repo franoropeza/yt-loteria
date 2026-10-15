@@ -1,9 +1,11 @@
 """Sube el compacto a la página de Facebook (Graph API), opcional.
 
-Se sube con el mismo título y descripción que en YouTube (sin capítulos). Solo actúa con FB_ACTIVO=true
-y FB_PAGE_ID / FB_PAGE_TOKEN configurados.
-Si FB_PUBLICAR no es "true", o el compacto tiene avisos, el video queda sin publicar en la biblioteca de videos
-de la página (Meta Business Suite > Contenido) para revisarlo y publicarlo a mano.
+Se sube con el mismo título que en YouTube; la descripción va sin capítulos y con los enlaces al sitio y a
+Twitch (que YouTube no permite). Solo actúa con FB_ACTIVO=true, FB_PAGE_ID / FB_PAGE_TOKEN configurados y para
+los sorteos de FB_SORTEOS.
+Si FB_PUBLICAR no es "true", o el compacto tiene avisos (salvo el +18 de YouTube, que acá no aplica), el video
+queda sin publicar en la biblioteca de videos de la página (Meta Business Suite > Contenido) para revisarlo y
+publicarlo a mano.
 
 Mayores de 18: la API no permite restringir por edad cada video; la restricción se configura una sola vez
 para toda la página (Configuración > Restricción de edad > 18+), y así aplica a todo lo que se publica.
@@ -26,8 +28,11 @@ def configurado():
     return bool(config.FB_PAGE_ID and config.FB_PAGE_TOKEN)
 
 
-def activo():
-    return config.FB_ACTIVO and configurado()
+def activo(sorteo_nombre=None):
+    """True si hay que subir a Facebook (y, con `sorteo_nombre`, si ese sorteo está en FB_SORTEOS)."""
+    if not (config.FB_ACTIVO and configurado()):
+        return False
+    return sorteo_nombre is None or not config.FB_SORTEOS or sorteo_nombre.upper() in config.FB_SORTEOS
 
 
 def _llamar(url, datos=None, tipo=None, timeout=60):
