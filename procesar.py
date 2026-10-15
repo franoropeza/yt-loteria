@@ -173,7 +173,13 @@ def main():
         respaldos = []
         vods = [v for v in vods if v["id"] == a.vod] or [twitch.info_vod(a.vod)]
     else:
-        if vods and twitch.en_vivo():
+        vivo = bool(vods) and twitch.en_vivo()
+        if a.solo_detectar:  # para diagnosticar corridas que no ven un VOD ya terminado
+            print(f"En vivo: {vivo}")
+            for v in vods[:3]:
+                print(f"VOD {v['id']} {v['inicio']:%d/%m %H:%M} {v['duracion'] // 60} min "
+                      f"{(estado.get(v['id']) or {}).get('estado', 'nuevo')} {v['titulo']}")
+        if vivo:
             vods = vods[1:]  # el más nuevo todavía se está grabando
         limite = ahora - dt.timedelta(hours=MAX_ANTIGUEDAD_HORAS)
         vods = [v for v in vods if v["inicio"] >= limite and pendiente(estado.get(v["id"]))]

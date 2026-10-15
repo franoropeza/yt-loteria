@@ -3,9 +3,9 @@ name: Compactos de sorteos
 on:
   # Las corridas las dispara cron-job.org (zona America/Argentina/Salta) llamando a la API
   # .../actions/workflows/compactos.yml/dispatches: el cron propio de GitHub no disparaba a horario.
-  #   35,55 12,15,18,21 * * *   1.ª y 2.ª revisión de los sorteos de 12, 15, 18 y 21 h
-  #   20 13,16,19,22 * * *      3.ª revisión
-  #   5,25,50 23 * * *          La Revancha (22:30)
+  #   22,27,32,40,55 12,15,18,21 * * *   revisiones de los sorteos de 12, 15, 18 y 21 h (el vivo dura ~20 min)
+  #   20 13,16,19,22 * * *               última revisión (80 min): aviso de sorteo sin VOD y respaldo
+  #   52,57 22 * * *  +  2,10,25,50 23 * * *   La Revancha (22:30)
   workflow_dispatch:
     inputs:
       vod:
