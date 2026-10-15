@@ -88,6 +88,7 @@ def publicar(info, subir):
         # con avisos se sube privado para revisarlo a mano, sin importar la configuración
         privacidad = "private" if info["avisos"] else config.YT_PRIVACIDAD
         registro.update(youtube.subir(info["compacto"], info, privacidad, info["miniatura"]), estado="ok")
+        registro["avisos"] += registro.pop("avisos_youtube")
         # el +18 de YouTube no frena a Facebook: ahí la restricción de edad es de toda la página
         fb_publicar = config.FB_PUBLICAR and not registro["avisos"]
         if not registro["mayores_18"]:

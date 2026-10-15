@@ -104,7 +104,7 @@ def metadatos(d, facebook=False):
 
 
 def subir(video, datos, privacidad, miniatura=None):
-    """Sube el video. Devuelve {video_id, url, titulo, privacidad, mayores_18}."""
+    """Sube el video. Devuelve {video_id, url, titulo, privacidad, mayores_18, avisos_youtube}."""
     yt = build("youtube", "v3", credentials=credenciales(), cache_discovery=False)
     titulo, descripcion, etiquetas = metadatos(datos)
     inicio = dt.datetime.strptime(f"{datos['fecha']} {datos['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
@@ -140,20 +140,28 @@ def subir(video, datos, privacidad, miniatura=None):
         except HttpError as e:
             print(f"No se pudo poner la miniatura: {e}")
 
-    leido = yt.videos().list(part="contentDetails", id=video_id).execute()["items"][0]
-    mayores_18 = leido["contentDetails"].get("contentRating", {}).get("ytRating") == "ytAgeRestricted"
-    privacidad_final = "private"
-    if mayores_18 and privacidad != "private":
-        yt.videos().update(part="status", body={"id": video_id, "status": {
-            "privacyStatus": privacidad, "selfDeclaredMadeForKids": False}}).execute()
-        privacidad_final = privacidad
+    # el video ya está subido: desde acá un error no puede llegar a procesar.py, que lo reintentaría
+    # y lo subiría de nuevo; queda como aviso para terminarlo a mano
+    avisos, mayores_18, privacidad_final = [], False, "private"
+    try:
+        leido = yt.videos().list(part="contentDetails", id=video_id).execute()["items"][0]
+        mayores_18 = leido["contentDetails"].get("contentRating", {}).get("ytRating") == "ytAgeRestricted"
+        if mayores_18 and privacidad != "private":
+            yt.videos().update(part="status", body={"id": video_id, "status": {
+                "privacyStatus": privacidad, "selfDeclaredMadeForKids": False}}).execute()
+            privacidad_final = privacidad
+    except Exception as e:
+        avisos.append(f"No se pudo revisar el +18 ni la privacidad en YouTube: {e}")
 
     playlists = [config.YT_PLAYLIST, json.loads(config.YT_PLAYLISTS or "{}").get(datos["sorteo_nombre"])]
     for pl in dict.fromkeys(p for p in playlists if p):  # sin repetir
-        yt.playlistItems().insert(part="snippet", body={"snippet": {
-            "playlistId": pl, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute()
+        try:
+            yt.playlistItems().insert(part="snippet", body={"snippet": {
+                "playlistId": pl, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute()
+        except Exception as e:
+            avisos.append(f"No se pudo agregar a la playlist {pl}: {e}")
     return {"video_id": video_id, "url": f"https://youtu.be/{video_id}", "titulo": titulo,
-            "privacidad": privacidad_final, "mayores_18": mayores_18}
+            "privacidad": privacidad_final, "mayores_18": mayores_18, "avisos_youtube": avisos}
 
 
 def autorizar(client_secret):
