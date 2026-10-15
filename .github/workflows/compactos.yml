@@ -37,7 +37,11 @@ jobs:
     outputs:
       pendientes: ${{ steps.detectar.outputs.pendientes }}
     steps:
+      # ref main: con workflow_dispatch el SHA queda fijo al momento del disparo; si la corrida
+      # estuvo en cola detrás de otra, sin esto no ve el estado que esa otra acaba de guardar.
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -68,6 +72,8 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -109,7 +115,7 @@ jobs:
           git config user.name "compactos-bot"
           git config user.email "compactos-bot@users.noreply.github.com"
           git add estado/ cronograma.csv
-          git diff --cached --quiet || (git commit -m "Estado de compactos $(date -u +%F' '%H:%M)" && git push)
+          git diff --cached --quiet || (git commit -m "Estado de compactos $(date -u +%F' '%H:%M)" && { git push || { git pull --rebase && git push; }; })
       - name: Guardar compactos armados (7 días)
         if: always()
         uses: actions/upload-artifact@v4
