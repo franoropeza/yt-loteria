@@ -99,11 +99,13 @@ def cantados_en_cabeza(segmentos, t_cab):
 def buscar_tablero(vod, desde):
     """Ubica el tablero de resultados entre la cabeza y el final del VOD.
 
-    Devuelve (t_datos, t_final, tombola_total):
+    Devuelve (t_datos, t_final, tombola_total, datos_con_cartel):
       t_datos: primer tablero sin cartel encima, para leer nombre/número del sorteo y la cabeza.
       t_final: último tablero, para el cierre.
     En Vespertina y Nocturna el tablero final lleva encima el cartel verde del Tómbola Total
-    (y el encabezado cambia a "TÓMBOLA TOTAL"), por eso los datos se leen antes."""
+    (y el encabezado cambia a "TÓMBOLA TOTAL"), por eso los datos se leen antes. A veces el tablero
+    aparece directamente con el cartel: ahí se lee ese, la cabeza (celda 1) se ve
+    igual pero el encabezado trae el número del Tómbola Total."""
     w, h, paso = 192, 108, 2
     raw = subprocess.run([config.FFMPEG, "-v", "error", "-ss", str(desde), "-i", str(vod),
                           "-vf", f"fps=1/{paso},scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
@@ -116,11 +118,12 @@ def buscar_tablero(vod, desde):
     cartel = ((g > 140) & (r < 140) & (b < 120)).mean(axis=(1, 2)) > 0.01
     limpios = np.where(tablero & ~cartel)[0]
     todos = np.where(tablero)[0]
-    if not len(limpios):
+    if not len(todos):
         raise CompactoError("No se encontró el tablero de resultados después de la cabeza")
+    elegidos = limpios if len(limpios) else todos
     # +1 cuadro: da tiempo a que termine la animación de entrada del tablero
-    t_datos = desde + min(limpios[0] + 1, limpios[-1]) * paso
-    return t_datos, desde + todos[-1] * paso, bool(cartel[todos[-1]])
+    t_datos = desde + min(elegidos[0] + 1, elegidos[-1]) * paso
+    return t_datos, desde + todos[-1] * paso, bool(cartel[todos[-1]]), not len(limpios)
 
 
 def capturar(vod, t, destino, recorte=None):
@@ -176,8 +179,9 @@ def elegir_cabeza(lecturas, cantados):
     return (votos[0][0] if votos else ""), False
 
 
-def combinar_datos(ocr, fila):
+def combinar_datos(ocr, fila, con_cartel=False):
     """El cronograma oficial manda; el OCR sirve para encontrar el sorteo si no hay fila, y como control.
+    Con el cartel del Tómbola Total el encabezado trae su número, así que solo se controla la fecha.
 
     Devuelve (datos, avisos). Un aviso significa que conviene revisar el video antes de publicarlo."""
     avisos = []
@@ -187,7 +191,7 @@ def combinar_datos(ocr, fila):
                  "hora": fila["hora"], "changuita": fila["changuita"], "tombola_total": fila["tombola_total"],
                  "fuente": "cronograma"}
         # el OCR a veces agrega un caracter suelto ("116238", "/16234"): se compara por contenido
-        if fila["sorteo"] not in ocr["sorteo_numero"] or ocr["fecha"] != fila["fecha"]:
+        if (fila["sorteo"] not in ocr["sorteo_numero"] and not con_cartel) or ocr["fecha"] != fila["fecha"]:
             avisos.append(f"El tablero dice sorteo {ocr['sorteo_numero']} del {ocr['fecha']}, "
                           f"el cronograma {fila['sorteo']} del {fila['fecha']}")
     else:
@@ -226,7 +230,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     """Arma el compacto. Devuelve un dict con los datos del sorteo, la ruta del video y los avisos."""
     salida.mkdir(parents=True, exist_ok=True)
     t_ini, t_cab, aviso_cabeza = buscar_momentos(segmentos)
-    t_datos, t_tab, cartel_tt = buscar_tablero(vod, t_cab)
+    t_datos, t_tab, cartel_tt, datos_con_cartel = buscar_tablero(vod, t_cab)
 
     tmp = Path(tempfile.mkdtemp())
     datos_png, cierre_png = tmp / "datos.png", tmp / "cierre.png"
@@ -237,7 +241,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     # la cabeza va en el título: se vota entre varias lecturas de los dos tableros y manda la que cantó el locutor
     lecturas = leer_cabeza(datos_png) + leer_cabeza(cierre_tab_png)
     ocr["cabeza"], confirmada = elegir_cabeza(lecturas, cantados_en_cabeza(segmentos, t_cab))
-    datos, avisos = combinar_datos(ocr, fila_cronograma)
+    datos, avisos = combinar_datos(ocr, fila_cronograma, datos_con_cartel)
     if ocr["cabeza"] and not confirmada:
         avisos.append(f"La cabeza del tablero ({ocr['cabeza']}) no coincide con la que cantó el locutor "
                       f"(lecturas: {', '.join(lecturas)})")
