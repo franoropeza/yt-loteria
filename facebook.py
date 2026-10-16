@@ -12,6 +12,7 @@ para toda la página (Configuración > Restricción de edad > 18+), y así aplic
 
 Requiere un token de página permanente con los permisos pages_manage_posts y pages_read_engagement.
 Probar el token:  python facebook.py verificar
+Estado de un video subido:  python facebook.py estado VIDEO_ID
 """
 import json
 import sys
@@ -73,10 +74,30 @@ def verificar():
         print(f"⚠️ FB_PAGE_ID es {config.FB_PAGE_ID}: no coincide con la página del token")
 
 
+def _consultar(ruta, campos):
+    consulta = urllib.parse.urlencode({"fields": campos, "access_token": config.FB_PAGE_TOKEN})
+    try:
+        return _llamar(f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{ruta}?{consulta}")
+    except RuntimeError as e:
+        return {"error": str(e)}
+
+
+def estado(video_id):
+    """Lo que la API dice de un video subido: procesamiento, publicación y si aparece entre las publicaciones de la
+    página. Para diagnosticar videos que se ven en la computadora pero no en el celular."""
+    video = _consultar(video_id, "id,title,published,created_time,length,permalink_url,privacy,status")
+    pagina = _consultar(config.FB_PAGE_ID, "id,name,is_published")
+    posts = _consultar(f"{config.FB_PAGE_ID}/posts", "id,created_time,is_published,permalink_url")
+    print(json.dumps({"video": video, "pagina": pagina, "ultimas_publicaciones": posts["data"][:5] if "data" in posts else posts},
+                     ensure_ascii=False, indent=2))
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] in (["verificar"], ["estado"]) and not configurado():
+        sys.exit("Faltan FB_PAGE_ID y FB_PAGE_TOKEN")
     if sys.argv[1:] == ["verificar"]:
-        if not configurado():
-            sys.exit("Faltan FB_PAGE_ID y FB_PAGE_TOKEN")
         verificar()
+    elif sys.argv[1:2] == ["estado"] and len(sys.argv) == 3:
+        estado(sys.argv[2])
     else:
         print(__doc__)
