@@ -52,6 +52,8 @@ def texto_compacto(registro):
                    f"Revisar y publicar: https://studio.youtube.com/video/{vid}/edit"]
         if fb := registro.get("facebook"):
             lineas.append(f"Facebook ({'publicado' if fb['publicado'] else 'sin publicar'}): {fb['url']}")
+        elif omitido := registro.get("facebook_omitido"):
+            lineas.append(omitido)
     else:
         lineas.append("Armado sin subir (prueba)")
     if avisos := registro.get("avisos"):

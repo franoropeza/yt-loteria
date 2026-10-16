@@ -41,6 +41,8 @@ FB_PUBLICAR = os.environ.get("FB_PUBLICAR", "false").lower() == "true"
 # sorteos que se suben a Facebook, separados por coma (vacío = todos)
 FB_SORTEOS = [s.strip().upper() for s in os.environ.get("FB_SORTEOS", "VESPERTINA,NOCTURNA").split(",") if s.strip()]
 FB_GRAPH_VERSION = os.environ.get("FB_GRAPH_VERSION", "v24.0")
+# pasados estos minutos desde la hora del sorteo ya no se sube a Facebook (ahí ya se publicó el extracto como imagen)
+FB_LIMITE_MIN = int(os.environ.get("FB_LIMITE_MIN", "60"))
 
 # avisos por Telegram (opcional, ver telegram.py)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")

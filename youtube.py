@@ -82,7 +82,7 @@ def metadatos(d, facebook=False):
         f"Extracto oficial publicado en {sitio}" if d.get("extracto")
         else f"Resultados provisorios. El extracto oficial se publica en {sitio}",
     ]
-    if not d.get("extracto"):  # el respaldo se arma justamente cuando no hay sorteo en Twitch
+    if not d.get("respaldo"):  # el respaldo se arma justamente cuando no hay sorteo en Twitch
         lineas.append(f"Sorteo completo en vivo: https://www.twitch.tv/{config.TWITCH_CANAL or 'loteriadesalta'}"
                       if facebook else "Para ver el sorteo completo, visitá nuestro canal oficial de Twitch.")
     lineas += [

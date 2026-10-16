@@ -47,6 +47,13 @@ Vista previa: `python youtube.py salida/compacto_....json`.
 Si falla (no se encontró "a la cabeza", error de red, etc.) se reintenta en las próximas corridas,
 hasta 3 veces.
 
+### Compacto híbrido (sin tablero)
+
+Si el locutor canta "a la cabeza" pero el tablero de resultados nunca aparece en la transmisión, se arma el compacto con el video del locutor como siempre y el cierre (y la miniatura) es la placa
+con el extracto oficial de la API, la misma del respaldo. Los datos salen del cronograma y la cabeza del extracto,
+controlada con la que cantó el locutor. Se sube **privado** con aviso y es solo para YouTube. Si el extracto
+todavía no está publicado, el VOD espera a la próxima corrida sin gastar un intento.
+
 ### Compacto de respaldo
 
 Si un sorteo del cronograma se queda sin compacto (no hubo VOD en Twitch o el VOD se abandonó después de
@@ -101,6 +108,8 @@ y al canal de Twitch (YouTube no los permite). Con `FB_PUBLICAR=false`, o si el 
 de YouTube: en Facebook la restricción de edad es de toda la página), queda sin publicar
 en la biblioteca de videos de la página (Meta Business Suite → Contenido) para revisarlo. Si falla Facebook, el
 compacto no se reintenta (ya está en YouTube): llega como aviso.
+- Solo va a Facebook el compacto normal (no el híbrido ni el respaldo), y solo si queda listo dentro de
+  `FB_LIMITE_MIN` (por defecto 60) desde la hora del sorteo: después ya se publicó el extracto como imagen.
 - El token tiene que ser **de página** y permanente, con `pages_manage_posts` y `pages_read_engagement`.
   Probarlo: `set FB_PAGE_ID=...` / `set FB_PAGE_TOKEN=...` y `python facebook.py verificar`.
 - **+18:** la API no restringe por edad cada video. Configurarlo una vez para toda la página

@@ -9,8 +9,11 @@ Uso:
   python procesar.py --sin-subir          # arma los compactos pero no sube nada (pruebas)
   python procesar.py --respaldo "14/10/2026 12:00"   # fuerza el compacto de respaldo de un sorteo
 
-Si un sorteo se queda sin compacto (no hubo VOD o el VOD se abandonó), se arma uno de respaldo con el
-extracto oficial (ver respaldo.py).
+En YouTube hay tres casos:
+  - compacto normal: video del locutor y cierre con el tablero de la transmisión;
+  - compacto híbrido: el tablero no apareció en la transmisión, el cierre es la placa con el extracto oficial;
+  - respaldo: no hubo VOD o se abandonó, solo intro + placa con el extracto oficial (ver respaldo.py).
+A Facebook va solo el compacto normal, y solo si está listo dentro de FB_LIMITE_MIN desde la hora del sorteo.
 """
 import argparse
 import datetime as dt
@@ -94,8 +97,13 @@ def publicar(info, subir):
         if not registro["mayores_18"]:
             registro["avisos"].append("No se pudo marcar +18 por la API: marcarlo en YouTube Studio "
                                       "(Detalles > Público > Restricción de edad) y recién ahí publicarlo")
-        # el respaldo (con extracto) es solo para YouTube: en Facebook el extracto se publica como imagen aparte
-        if not info.get("extracto") and facebook.activo(info["sorteo_nombre"]):
+        # el respaldo y el híbrido (con extracto) son solo para YouTube: en Facebook el extracto se publica como
+        # imagen aparte, y pasado FB_LIMITE_MIN desde el sorteo tampoco se sube el compacto normal
+        if info.get("extracto") or not facebook.activo(info["sorteo_nombre"]):
+            pass
+        elif not a_tiempo_facebook(info):
+            registro["facebook_omitido"] = f"Pasaron más de {config.FB_LIMITE_MIN} min del sorteo: no se sube a Facebook"
+        else:
             try:  # con avisos de contenido queda sin publicar para revisarlo
                 registro["facebook"] = facebook.subir(info["compacto"], info, fb_publicar, info["miniatura"])
             except Exception as e:  # no se reintenta: volvería a subirlo a YouTube
@@ -103,6 +111,15 @@ def publicar(info, subir):
                 registro["avisos"].append(f"No se pudo subir a Facebook: {e}")
     telegram.avisar(telegram.texto_compacto(registro), Path(info["miniatura"]))
     return registro
+
+
+def a_tiempo_facebook(info, ahora=None):
+    """True si todavía no pasaron FB_LIMITE_MIN desde la hora del sorteo."""
+    try:
+        hora = dt.datetime.strptime(f"{info['fecha']} {info['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
+    except (KeyError, ValueError):  # sin hora confiable (sorteo fuera del cronograma): no se arriesga
+        return False
+    return (ahora or dt.datetime.now(config.ARG)) - hora <= dt.timedelta(minutes=config.FB_LIMITE_MIN)
 
 
 def extracto_publicado(fila):
@@ -204,6 +221,14 @@ def main():
         try:
             registro = procesar_vod(vod, subir=not a.sin_subir)
         except Exception as e:  # CompactoError, red, YouTube, etc.: se reintenta en la próxima corrida
+            if type(e).__name__ == "ExtractoPendiente":  # no es un error: se espera el extracto sin gastar intentos
+                print(f"{e}: se reintenta en la próxima corrida", flush=True)
+                if not a.sin_subir:
+                    estado[vod["id"]] = {"estado": "error", "error": str(e), "intentos": previo.get("intentos", 0),
+                                         "titulo_twitch": vod["titulo"],
+                                         "actualizado": dt.datetime.now(config.ARG).isoformat(timespec="seconds")}
+                    guardar_estado(estado)
+                continue
             hubo_error = True
             traceback.print_exc()
             intentos = previo.get("intentos", 0) + 1

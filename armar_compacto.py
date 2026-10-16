@@ -3,6 +3,8 @@
 Estructura del compacto:
   intro (fondo + logo Tómbola + título) -> bienvenida del locutor -> tramo hasta "a la cabeza"
   -> cierre con la captura del tablero final.
+Si el tablero no aparece en la transmisión, se arma un compacto híbrido: el mismo video
+del locutor, pero el cierre es la placa con el extracto oficial de la API (ver respaldo.py).
 La cortina musical suena de fondo y baja sola cuando habla el locutor.
 
 Uso local:
@@ -42,6 +44,14 @@ CAMPOS_OCR = {                         # coordenadas relativas al tablero recort
 
 class CompactoError(Exception):
     pass
+
+
+class SinTablero(CompactoError):
+    pass
+
+
+class ExtractoPendiente(CompactoError):
+    """Falta el tablero y el extracto oficial todavía no está en la API: se reintenta sin gastar un intento."""
 
 
 def buscar_momentos(segmentos):
@@ -119,7 +129,7 @@ def buscar_tablero(vod, desde):
     limpios = np.where(tablero & ~cartel)[0]
     todos = np.where(tablero)[0]
     if not len(todos):
-        raise CompactoError("No se encontró el tablero de resultados después de la cabeza")
+        raise SinTablero("No se encontró el tablero de resultados después de la cabeza")
     elegidos = limpios if len(limpios) else todos
     # +1 cuadro: da tiempo a que termine la animación de entrada del tablero
     t_datos = desde + min(elegidos[0] + 1, elegidos[-1]) * paso
@@ -202,6 +212,27 @@ def combinar_datos(ocr, fila, con_cartel=False):
     return datos, avisos
 
 
+def datos_hibrido(segmentos, t_cab, fila, placa_png):
+    """Sin tablero en la transmisión: los datos salen del cronograma y del extracto oficial, y la placa del
+    extracto (la del respaldo) se guarda en `placa_png` para el cierre. Devuelve (datos, avisos)."""
+    import respaldo
+    if not fila:
+        raise CompactoError("No se encontró el tablero y el sorteo no está en el cronograma (sin extracto oficial)")
+    numeros = respaldo.extracto(fila)
+    if not numeros:
+        raise ExtractoPendiente("No apareció el tablero en la transmisión y el extracto oficial todavía no está publicado")
+    datos = {"sorteo_nombre": fila["nombre"], "sorteo_numero": fila["sorteo"], "fecha": fila["fecha"],
+             "hora": fila["hora"], "changuita": fila["changuita"], "tombola_total": fila["tombola_total"],
+             "cabeza": numeros[0], "extracto": numeros, "fuente": "cronograma", "hibrido": True}
+    respaldo.placa(datos, numeros, placa_png)
+    avisos = ["No apareció el tablero en la transmisión: el cierre muestra el extracto oficial"]
+    cantados = cantados_en_cabeza(segmentos, t_cab)
+    if not elegir_cabeza([numeros[0]], cantados)[1]:
+        avisos.append(f"La cabeza del extracto oficial ({numeros[0]}) no coincide con la que cantó el locutor "
+                      f"({', '.join(sorted(cantados)) or 'no se entendió'})")
+    return datos, avisos
+
+
 def texto_ff(t):
     return t.replace("\\", "\\\\").replace(":", "\\:").replace("'", "’")
 
@@ -230,25 +261,29 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     """Arma el compacto. Devuelve un dict con los datos del sorteo, la ruta del video y los avisos."""
     salida.mkdir(parents=True, exist_ok=True)
     t_ini, t_cab, aviso_cabeza = buscar_momentos(segmentos)
-    t_datos, t_tab, cartel_tt, datos_con_cartel = buscar_tablero(vod, t_cab)
-
     tmp = Path(tempfile.mkdtemp())
-    datos_png, cierre_png = tmp / "datos.png", tmp / "cierre.png"
-    capturar(vod, t_datos, datos_png, recorte=TABLERO)
-    capturar(vod, t_tab, cierre_png)
-    capturar(vod, t_tab, cierre_tab_png := tmp / "cierre_tablero.png", recorte=TABLERO)
-    ocr = leer_tablero(datos_png)
-    # la cabeza va en el título: se vota entre varias lecturas de los dos tableros y manda la que cantó el locutor
-    lecturas = leer_cabeza(datos_png) + leer_cabeza(cierre_tab_png)
-    ocr["cabeza"], confirmada = elegir_cabeza(lecturas, cantados_en_cabeza(segmentos, t_cab))
-    datos, avisos = combinar_datos(ocr, fila_cronograma, datos_con_cartel)
-    if ocr["cabeza"] and not confirmada:
-        avisos.append(f"La cabeza del tablero ({ocr['cabeza']}) no coincide con la que cantó el locutor "
-                      f"(lecturas: {', '.join(lecturas)})")
+    cierre_png = tmp / "cierre.png"
+    try:
+        t_datos, t_tab, cartel_tt, datos_con_cartel = buscar_tablero(vod, t_cab)
+    except SinTablero:
+        datos, avisos = datos_hibrido(segmentos, t_cab, fila_cronograma, cierre_png)
+        t_datos = t_tab = None
+    else:
+        capturar(vod, t_datos, datos_png := tmp / "datos.png", recorte=TABLERO)
+        capturar(vod, t_tab, cierre_png)
+        capturar(vod, t_tab, cierre_tab_png := tmp / "cierre_tablero.png", recorte=TABLERO)
+        ocr = leer_tablero(datos_png)
+        # la cabeza va en el título: se vota entre varias lecturas de los dos tableros y manda la que cantó el locutor
+        lecturas = leer_cabeza(datos_png) + leer_cabeza(cierre_tab_png)
+        ocr["cabeza"], confirmada = elegir_cabeza(lecturas, cantados_en_cabeza(segmentos, t_cab))
+        datos, avisos = combinar_datos(ocr, fila_cronograma, datos_con_cartel)
+        if ocr["cabeza"] and not confirmada:
+            avisos.append(f"La cabeza del tablero ({ocr['cabeza']}) no coincide con la que cantó el locutor "
+                          f"(lecturas: {', '.join(lecturas)})")
+        if cartel_tt and not datos["tombola_total"]:
+            avisos.append("Se vio el cartel de Tómbola Total pero el cronograma no lo indica")
     if aviso_cabeza:
         avisos.append(aviso_cabeza)
-    if cartel_tt and not datos["tombola_total"]:
-        avisos.append("Se vio el cartel de Tómbola Total pero el cronograma no lo indica")
 
     b_ini = max(t_ini, t_cab - config.ANTES_CABEZA - config.BIENVENIDA_DUR)  # sin solapar con el tramo de la cabeza
     b_dur = min(config.BIENVENIDA_DUR, t_cab - config.ANTES_CABEZA - b_ini)
@@ -288,7 +323,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
         f.append(f"[{entrada}:v]{norm}[v{k}]")
         f.append(f"[{entrada}:a]aresample=48000,aformat=channel_layouts=stereo[a{k}]")
         k, entrada = k + 1, entrada + 1
-    f.append(f"[{entrada}:v]scale=1920:1080,setsar=1,fps=30,trim=duration={config.CIERRE_DUR},format=yuv420p[v{k}]")  # cierre: captura del tablero
+    f.append(f"[{entrada}:v]scale=1920:1080,setsar=1,fps=30,trim=duration={config.CIERRE_DUR},format=yuv420p[v{k}]")  # cierre: tablero o placa
     f.append(f"anullsrc=r=48000:cl=stereo,atrim=0:{config.CIERRE_DUR}[a{k}]")
 
     # encadenar con fundidos
@@ -318,9 +353,9 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
 
     info = {**datos, "compacto": str(destino), "miniatura": str(destino.with_suffix(".jpg")),
             "duracion": round(total, 1), "inicio_bienvenida": round(t_ini, 1), "momento_cabeza": round(t_cab, 1),
-            "momento_datos": round(t_datos, 1), "momento_tablero": round(t_tab, 1), "avisos": avisos,
+            "momento_datos": t_datos and round(t_datos, 1), "momento_tablero": t_tab and round(t_tab, 1), "avisos": avisos,
             "capitulos": [[round(t), nombre] for t, nombre in capitulos]}
-    Image.open(cierre_png).convert("RGB").save(info["miniatura"], quality=90)  # el tablero sirve de miniatura
+    Image.open(cierre_png).convert("RGB").save(info["miniatura"], quality=90)  # el tablero (o la placa) sirve de miniatura
     destino.with_suffix(".json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
     shutil.rmtree(tmp, ignore_errors=True)
     return info
