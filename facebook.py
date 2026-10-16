@@ -88,7 +88,21 @@ def estado(video_id):
     video = _consultar(video_id, "id,title,published,created_time,length,permalink_url,privacy,status")
     pagina = _consultar(config.FB_PAGE_ID, "id,name,is_published")
     posts = _consultar(f"{config.FB_PAGE_ID}/posts", "id,created_time,is_published,permalink_url")
-    print(json.dumps({"video": video, "pagina": pagina, "ultimas_publicaciones": posts["data"][:5] if "data" in posts else posts},
+    # campos que delatan bloqueos (copyright, segmentación, publicación oculta); de a uno, porque si la API no
+    # conoce alguno rechaza toda la consulta
+    def de_a_uno(ruta, campos):
+        return {c: r["error"] if "error" in (r := _consultar(ruta, c)) else r.get(c, "(sin dato)") for c in campos}
+
+    extra_video = de_a_uno(video_id, ("copyright_check_information", "embeddable", "is_crossposting_eligible",
+                                      "content_category", "post_id", "is_instagram_eligible"))
+    publicacion = next((p for p in posts.get("data", []) if video_id in p.get("permalink_url", "")), None)
+    extra_post = de_a_uno(publicacion["id"], ("is_hidden", "is_expired", "is_eligible_for_promotion", "privacy",
+                                              "status_type", "feed_targeting", "targeting")) if publicacion else {}
+    extra_pagina = de_a_uno(config.FB_PAGE_ID, ("is_always_open", "is_permanently_closed", "is_unclaimed",
+                                                "restrictions", "verification_status"))
+    print(json.dumps({"video": video, "video_extra": extra_video, "publicacion": publicacion, "publicacion_extra": extra_post,
+                      "pagina": pagina, "pagina_extra": extra_pagina,
+                      "ultimas_publicaciones": posts["data"][:5] if "data" in posts else posts},
                      ensure_ascii=False, indent=2))
 
 
