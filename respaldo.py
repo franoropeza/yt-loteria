@@ -87,7 +87,7 @@ def placa(datos, numeros, destino):
     blanco, oro, tenue = (255, 255, 255, 255), (255, 209, 0, 255), (255, 255, 255, 150)
 
     # encabezado
-    titulo = f"{datos['sorteo_nombre']}  ·  SORTEO {datos['sorteo_numero']}  ·  {datos['fecha']}"
+    titulo = f"{datos['sorteo_nombre']}  ·  N° {datos['sorteo_numero']}  ·  {datos['fecha']}"
     d.text((960, 175), titulo, font=_fuente(46), fill=blanco, anchor="mm")
 
     # panel izquierdo: logo + cabeza

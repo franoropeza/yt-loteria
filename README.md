@@ -91,6 +91,7 @@ Repositorio **privado** en una cuenta u organización de la Lotería (no persona
 | Variable | `FB_PAGE_ID` | opcional: ID de la página de Facebook (ver abajo) |
 | Variable | `FB_PUBLICAR` | `false` para arrancar (sube sin publicar); `true` para publicar directo |
 | Variable | `FB_SORTEOS` | opcional: sorteos que van a Facebook (por defecto `VESPERTINA,NOCTURNA`; vacía = todos) |
+| Variable | `FB_ENDPOINT` | opcional: `reels` (por defecto, API de Reels, máx. 90 s) o `videos` (endpoint `/videos`) |
 | Secreto | `FB_PAGE_TOKEN` | opcional: token de página permanente de Facebook |
 | Secreto | `TELEGRAM_TOKEN` | opcional: token del bot de avisos (ver abajo) |
 | Secreto | `TELEGRAM_CHAT_ID` | opcional: chat donde llegan los avisos |

@@ -5,8 +5,8 @@ on:
   workflow_dispatch:
     inputs:
       video_id:
-        description: "ID del video de Facebook (está en estado/procesados.json)"
-        required: true
+        description: "ID del video de Facebook (está en estado/procesados.json); vacío = probar la subida por Reels con un clip en borrador"
+        required: false
 
 permissions:
   contents: read
@@ -26,4 +26,5 @@ jobs:
           FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
           PYTHONIOENCODING: utf-8
           VIDEO_ID: ${{ inputs.video_id }}
-        run: python facebook.py estado "$VIDEO_ID"
+        run: |
+          if [ -n "$VIDEO_ID" ]; then python facebook.py estado "$VIDEO_ID"; else python facebook.py probar; fi

@@ -40,6 +40,8 @@ FB_PAGE_TOKEN = os.environ.get("FB_PAGE_TOKEN", "")   # token de página permane
 FB_PUBLICAR = os.environ.get("FB_PUBLICAR", "false").lower() == "true"
 # sorteos que se suben a Facebook, separados por coma (vacío = todos)
 FB_SORTEOS = [s.strip().upper() for s in os.environ.get("FB_SORTEOS", "VESPERTINA,NOCTURNA").split(",") if s.strip()]
+# "reels" (API de Reels, /video_reels) o "videos" (/videos)
+FB_ENDPOINT = os.environ.get("FB_ENDPOINT", "reels").lower()
 FB_GRAPH_VERSION = os.environ.get("FB_GRAPH_VERSION", "v24.0")
 # pasados estos minutos desde la hora del sorteo ya no se sube a Facebook (ahí ya se publicó el extracto como imagen)
 FB_LIMITE_MIN = int(os.environ.get("FB_LIMITE_MIN", "60"))

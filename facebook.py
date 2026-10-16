@@ -10,9 +10,12 @@ publicarlo a mano.
 Mayores de 18: la API no permite restringir por edad cada video; la restricción se configura una sola vez
 para toda la página (Configuración > Restricción de edad > 18+), y así aplica a todo lo que se publica.
 
+FB_ENDPOINT elige cómo se sube: "reels" (API de Reels, /video_reels; máximo 90 s) o "videos" (/videos, el original).
+
 Requiere un token de página permanente con los permisos pages_manage_posts y pages_read_engagement.
 Probar el token:  python facebook.py verificar
 Estado de un video subido:  python facebook.py estado VIDEO_ID
+Probar la subida por Reels con un clip de 5 s en borrador (no se publica y después se borra):  python facebook.py probar
 """
 import json
 import sys
@@ -53,6 +56,8 @@ def subir(video, datos, publicar, miniatura=None):
     """Sube el video a la página. Devuelve {video_id, url, publicado}."""
     import youtube  # mismos textos que en YouTube
     titulo, descripcion, _ = youtube.metadatos(datos, facebook=True)
+    if config.FB_ENDPOINT == "reels":
+        return _subir_reel(video, titulo, descripcion, publicar)
     campos = {"access_token": config.FB_PAGE_TOKEN, "title": titulo, "description": descripcion,
               "published": "true" if publicar else "false"}
     archivos = {"source": Path(video)}
@@ -63,6 +68,31 @@ def subir(video, datos, publicar, miniatura=None):
     video_id = _llamar(url, cuerpo, tipo, timeout=600)["id"]
     return {"video_id": video_id, "url": f"https://www.facebook.com/{config.FB_PAGE_ID}/videos/{video_id}",
             "publicado": publicar}
+
+
+def _subir_reel(video, titulo, descripcion, publicar):
+    """Sube por la API de Reels (/video_reels): iniciar, mandar el archivo a rupload y cerrar publicando.
+    Facebook de todos modos convertía en reel lo subido por /videos. Acá no va la miniatura (la API no la recibe)."""
+    base = f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{config.FB_PAGE_ID}/video_reels"
+    token = config.FB_PAGE_TOKEN
+    inicio = _llamar(base, urllib.parse.urlencode({"upload_phase": "start", "access_token": token}).encode())
+    video_id = inicio["video_id"]
+    contenido = Path(video).read_bytes()
+    pedido = urllib.request.Request(
+        inicio.get("upload_url") or f"https://rupload.facebook.com/video-upload/{config.FB_GRAPH_VERSION}/{video_id}",
+        data=contenido, headers={"Authorization": f"OAuth {token}", "offset": "0", "file_size": str(len(contenido))})
+    try:
+        with urllib.request.urlopen(pedido, timeout=600) as r:
+            if not json.load(r).get("success"):
+                raise RuntimeError("Facebook no confirmó la subida del reel")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Facebook respondió {e.code} al subir el reel: {e.read().decode(errors='replace')}") from None
+    fin = {"upload_phase": "finish", "video_id": video_id, "video_state": "PUBLISHED" if publicar else "DRAFT",
+           "title": titulo, "description": descripcion, "access_token": token}
+    if not _llamar(base, urllib.parse.urlencode(fin).encode()).get("success"):
+        raise RuntimeError("Facebook no confirmó la publicación del reel")
+    return {"video_id": video_id, "url": f"https://www.facebook.com/reel/{video_id}", "publicado": publicar,
+            "endpoint": "reels"}
 
 
 def verificar():
@@ -106,12 +136,32 @@ def estado(video_id):
                      ensure_ascii=False, indent=2))
 
 
+def probar():
+    """Sube por /video_reels un clip de prueba como borrador, muestra su estado y lo borra."""
+    import subprocess
+    import tempfile
+    clip = Path(tempfile.mkdtemp()) / "prueba.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=5",
+                    "-f", "lavfi", "-i", "sine=d=5", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                    "-shortest", str(clip)], check=True)
+    r = _subir_reel(clip, "Prueba de subida (borrador)", "Prueba", publicar=False)
+    print(f"Subido en borrador: {r['video_id']}")
+    import time
+    time.sleep(20)  # que Facebook alcance a procesarlo
+    estado(r["video_id"])
+    borrado = _llamar(f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{r['video_id']}?"
+                      + urllib.parse.urlencode({"access_token": config.FB_PAGE_TOKEN, "method": "delete"}))
+    print(f"Borrado: {borrado}")
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] in (["verificar"], ["estado"]) and not configurado():
+    if sys.argv[1:2] in (["verificar"], ["estado"], ["probar"]) and not configurado():
         sys.exit("Faltan FB_PAGE_ID y FB_PAGE_TOKEN")
     if sys.argv[1:] == ["verificar"]:
         verificar()
     elif sys.argv[1:2] == ["estado"] and len(sys.argv) == 3:
         estado(sys.argv[2])
+    elif sys.argv[1:] == ["probar"]:
+        probar()
     else:
         print(__doc__)

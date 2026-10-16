@@ -29,7 +29,7 @@ SCOPES = ["https://www.googleapis.com/auth/youtube"]
 LEYENDA = ("+18 Jugar compulsivamente es perjudicial para la salud. Prohibida su venta a menores de 18 años. "
            "Para más información comunicarse al 387-5420599 / 0800-55 5846 (JUEGO).")
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-HORARIOS = ("Sorteos de la Tómbola: lunes a viernes 12:00, 15:00, 18:00, 21:00 y 22:30 hs; "
+HORARIOS = ("Horarios de la Tómbola: lunes a viernes 12:00, 15:00, 18:00, 21:00 y 22:30 hs; "
             "sábados 12:00, 15:00, 21:00 y 22:30 hs; domingos 12:00 y 15:00 hs.")
 
 
@@ -53,16 +53,17 @@ def _mmss(segundos):
 def metadatos(d, facebook=False):
     """Título, descripción y etiquetas pensados para búsqueda ("tómbola salta matutina hoy", "quiniela de salta").
 
-    facebook=True: sin capítulos (Facebook no los usa) y con "Seguí la página" en vez de "Suscribite"."""
+    facebook=True: sin capítulos (Facebook no los usa) y con "Seguí la página" en vez de "Suscribite".
+    En ningún texto van las palabras "sorteo" ni "apuesta" (para que las plataformas no lo traten como juego de azar)."""
     nombre = d["sorteo_nombre"].title()
     fecha = dt.datetime.strptime(d["fecha"], "%d/%m/%Y")
     dia = DIAS[fecha.weekday()]
 
     # el N° de Tómbola Total va solo en la descripción, no en el título
-    titulo = f"Tómbola de Salta {nombre} {d['fecha']} | Sorteo {d['sorteo_numero']} | A la cabeza {d['cabeza']}"
+    titulo = f"Tómbola de Salta {nombre} {d['fecha']} | N° {d['sorteo_numero']} | A la cabeza {d['cabeza']}"
 
     lineas = [
-        f"Resultados de la Tómbola de Salta, sorteo {nombre} N° {d['sorteo_numero']} "
+        f"Resultados de la Tómbola de Salta {nombre} N° {d['sorteo_numero']} "
         f"del {dia} {d['fecha']} a las {d['hora']} hs.",
         f"A la cabeza: {d['cabeza']}",
         "",
@@ -70,9 +71,9 @@ def metadatos(d, facebook=False):
     if d.get("extracto"):  # compacto de respaldo: los 20 números de la API oficial
         lineas += ["Extracto oficial:"] + [f"{i:>2}. {n}" for i, n in enumerate(d["extracto"], 1)] + [""]
     if d.get("changuita"):
-        lineas.append(f"La Changuita: sorteo N° {d['changuita']}.")
+        lineas.append(f"La Changuita: N° {d['changuita']}.")
     if d.get("tombola_total"):
-        lineas.append(f"Tómbola Total: sorteo N° {d['tombola_total']}.")
+        lineas.append(f"Tómbola Total: N° {d['tombola_total']}.")
     if d.get("capitulos") and not facebook:
         lineas += ["", "Capítulos:"] + [f"{_mmss(t)} {texto}" for t, texto in d["capitulos"]]
     # YouTube no deja poner enlaces en la descripción: el sitio y Twitch se mencionan sin URL (en Facebook, sí)
@@ -82,13 +83,13 @@ def metadatos(d, facebook=False):
         f"Extracto oficial publicado en {sitio}" if d.get("extracto")
         else f"Resultados provisorios. El extracto oficial se publica en {sitio}",
     ]
-    if not d.get("respaldo"):  # el respaldo se arma justamente cuando no hay sorteo en Twitch
-        lineas.append(f"Sorteo completo en vivo: https://www.twitch.tv/{config.TWITCH_CANAL or 'loteriadesalta'}"
-                      if facebook else "Para ver el sorteo completo, visitá nuestro canal oficial de Twitch.")
+    if not d.get("respaldo"):  # el respaldo se arma justamente cuando no hay transmisión en Twitch
+        lineas.append(f"Completo en vivo: https://www.twitch.tv/{config.TWITCH_CANAL or 'loteriadesalta'}"
+                      if facebook else "Para verlo completo, visitá nuestro canal oficial de Twitch.")
     lineas += [
         HORARIOS,
-        "Seguí la página para ver el resumen de cada sorteo." if facebook
-        else "Suscribite para ver el resumen de cada sorteo.",
+        "Seguí la página para ver todos los resúmenes de la Tómbola." if facebook
+        else "Suscribite para ver todos los resúmenes de la Tómbola.",
         "",
         LEYENDA,
         "",
@@ -97,7 +98,7 @@ def metadatos(d, facebook=False):
 
     etiquetas = ["Tómbola de Salta", "Tómbola Salta", "Quiniela de Salta", "Quiniela Salta", "Lotería de Salta",
                  f"Tómbola {nombre}", f"Tómbola {nombre} hoy", f"Quiniela {nombre} Salta", f"Tómbola {d['fecha']}",
-                 "resultados Tómbola", "sorteo Tómbola", "La Changuita", "extracto Tómbola"]
+                 "resultados Tómbola", "Tómbola hoy", "La Changuita", "extracto Tómbola"]
     if d.get("tombola_total"):
         etiquetas.append("Tómbola Total")
     return titulo[:100], "\n".join(lineas), etiquetas

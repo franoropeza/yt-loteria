@@ -245,7 +245,7 @@ def filtro_intro(datos):
     """Filtro de FFmpeg de la intro (entradas 0 = fondo, 1 = logo): fondo fijo + logo + título
     (y Tómbola Total si corresponde). Sale como [v0]."""
     fuente = ruta_ff(config.FUENTE)
-    titulo = f"{datos['sorteo_nombre']}  ·  SORTEO {datos['sorteo_numero']}  ·  {datos['fecha']}"
+    titulo = f"{datos['sorteo_nombre']}  ·  N° {datos['sorteo_numero']}  ·  {datos['fecha']}"
     intro = (f"[0:v]scale=1920:1080,setsar=1,fps=30[fondo];"
              f"[1:v]scale=760:-1[logo];[fondo][logo]overlay=x=(W-w)/2:y=300,"
              f"drawtext=fontfile='{fuente}':text='{texto_ff(titulo)}':fontsize=60:fontcolor=white:"
@@ -298,7 +298,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
 
     # capítulos de YouTube (en segundos dentro del compacto); cada uno tiene que durar 10 s o más
     ini_cabeza = total - config.CIERRE_DUR - c_dur + config.FUNDIDO
-    capitulos = [(0, "Presentación"), (ini_cabeza, "Sorteo"),
+    capitulos = [(0, "Presentación"), (ini_cabeza, "Extracción"),
                  (ini_cabeza + (t_cab - c_ini) - 3, f"A la cabeza: {datos['cabeza']}"),
                  (total - config.CIERRE_DUR, "Resultados")]
     validos = [capitulos[0]]
