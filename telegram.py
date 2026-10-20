@@ -50,10 +50,8 @@ def texto_compacto(registro):
         lineas += [f"Subido como {registro['privacidad']}"
                    + (" · +18 confirmado" if registro.get("mayores_18") else " · falta marcar +18"),
                    f"Revisar y publicar: https://studio.youtube.com/video/{vid}/edit"]
-        if fb := registro.get("facebook"):
-            lineas.append(f"Facebook ({'publicado' if fb['publicado'] else 'sin publicar'}): {fb['url']}")
-        elif omitido := registro.get("facebook_omitido"):
-            lineas.append(omitido)
+        if registro.get("facebook_pendiente"):
+            lineas.append("Facebook: se comparte el enlace cuando el video esté público en YouTube")
     else:
         lineas.append("Armado sin subir (prueba)")
     if avisos := registro.get("avisos"):
