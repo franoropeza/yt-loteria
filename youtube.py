@@ -14,6 +14,7 @@ Autorizar por primera vez (genera token.json; su contenido va al secreto YT_TOKE
 """
 import datetime as dt
 import json
+import re
 import sys
 
 from google.auth.transport.requests import Request
@@ -26,8 +27,9 @@ import config
 
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
 
-LEYENDA = ("+18 Jugar compulsivamente es perjudicial para la salud. Prohibida su venta a menores de 18 años. "
-           "Para más información comunicarse al 387-5420599 / 0800-55 5846 (JUEGO).")
+LEYENDA_CORTA = "+18 Jugar compulsivamente es perjudicial para la salud. Prohibida su venta a menores de 18 años."
+LEYENDA = LEYENDA_CORTA + " Para más información comunicarse al 387-5420599 / 0800-55 5846 (JUEGO)."
+CANAL = "https://www.youtube.com/@loteriadesaltaok"
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 HORARIOS = ("Horarios de la Tómbola: lunes a viernes 12:00, 15:00, 18:00, 21:00 y 22:30 hs; "
             "sábados 12:00, 15:00, 21:00 y 22:30 hs; domingos 12:00 y 15:00 hs.")
@@ -53,7 +55,8 @@ def _mmss(segundos):
 def metadatos(d, facebook=False):
     """Título, descripción y etiquetas pensados para búsqueda ("tómbola salta matutina hoy", "quiniela de salta").
 
-    facebook=True: sin capítulos (Facebook no los usa) y con "Seguí la página" en vez de "Suscribite".
+    facebook=True: más corta (sin capítulos, La Changuita, Tómbola Total, horarios ni teléfonos) y con el enlace al
+    canal de YouTube.
     En ningún texto van las palabras "sorteo" ni "apuesta" (para que las plataformas no lo traten como juego de azar)."""
     nombre = d["sorteo_nombre"].title()
     fecha = dt.datetime.strptime(d["fecha"], "%d/%m/%Y")
@@ -70,9 +73,9 @@ def metadatos(d, facebook=False):
     ]
     if d.get("extracto"):  # compacto de respaldo: los 20 números de la API oficial
         lineas += ["Extracto oficial:"] + [f"{i:>2}. {n}" for i, n in enumerate(d["extracto"], 1)] + [""]
-    if d.get("changuita"):
+    if d.get("changuita") and not facebook:
         lineas.append(f"La Changuita: N° {d['changuita']}.")
-    if d.get("tombola_total"):
+    if d.get("tombola_total") and not facebook:
         lineas.append(f"Tómbola Total: N° {d['tombola_total']}.")
     if d.get("capitulos") and not facebook:
         lineas += ["", "Capítulos:"] + [f"{_mmss(t)} {texto}" for t, texto in d["capitulos"]]
@@ -86,12 +89,13 @@ def metadatos(d, facebook=False):
     if not d.get("respaldo"):  # el respaldo se arma justamente cuando no hay transmisión en Twitch
         lineas.append(f"Completo en vivo: https://www.twitch.tv/{config.TWITCH_CANAL or 'loteriadesalta'}"
                       if facebook else "Para verlo completo, visitá nuestro canal oficial de Twitch.")
+    if facebook:
+        lineas.append(f"Suscribite a nuestro canal de YouTube para ver todos los resúmenes de la Tómbola: {CANAL}")
+    else:
+        lineas += [HORARIOS, "Suscribite para ver todos los resúmenes de la Tómbola."]
     lineas += [
-        HORARIOS,
-        "Seguí la página para ver todos los resúmenes de la Tómbola." if facebook
-        else "Suscribite para ver todos los resúmenes de la Tómbola.",
         "",
-        LEYENDA,
+        LEYENDA_CORTA if facebook else LEYENDA,
         "",
         f"#TómbolaDeSalta #QuinielaDeSalta #Tómbola{nombre.replace(' ', '')}",
     ]
@@ -101,7 +105,8 @@ def metadatos(d, facebook=False):
                  "resultados Tómbola", "Tómbola hoy", "La Changuita", "extracto Tómbola"]
     if d.get("tombola_total"):
         etiquetas.append("Tómbola Total")
-    return titulo[:100], "\n".join(lineas), etiquetas
+    descripcion = re.sub(r"\n{3,}", "\n\n", "\n".join(lineas))  # sin renglones en blanco repetidos
+    return titulo[:100], descripcion, etiquetas
 
 
 def subir(video, datos, privacidad, miniatura=None):
@@ -163,16 +168,6 @@ def subir(video, datos, privacidad, miniatura=None):
             avisos.append(f"No se pudo agregar a la playlist {pl}: {e}")
     return {"video_id": video_id, "url": f"https://youtu.be/{video_id}", "titulo": titulo,
             "privacidad": privacidad_final, "mayores_18": mayores_18, "avisos_youtube": avisos}
-
-
-def privacidades(video_ids):
-    """{video_id: privacyStatus} de los videos indicados (1 unidad de cuota cada 50 videos)."""
-    yt = build("youtube", "v3", credentials=credenciales(), cache_discovery=False)
-    resultado = {}
-    for i in range(0, len(video_ids), 50):
-        respuesta = yt.videos().list(part="status", id=",".join(video_ids[i:i + 50])).execute()
-        resultado.update({v["id"]: v["status"]["privacyStatus"] for v in respuesta.get("items", [])})
-    return resultado
 
 
 def autorizar(client_secret):

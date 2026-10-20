@@ -1,38 +1,42 @@
-"""Comparte en la página de Facebook (Graph API) el enlace de YouTube del compacto, opcional.
+"""Sube el compacto a la página de Facebook (Graph API), opcional.
 
-No se sube el video: se publica en el muro de la página el enlace https://youtu.be/... con el mismo título y la
-descripción de Facebook (sin capítulos y con los enlaces al sitio y a Twitch, que YouTube no permite). Solo actúa con
-FB_ACTIVO=true y FB_PAGE_ID / FB_PAGE_TOKEN configurados, y va con todos los compactos que se suben a YouTube
-(todos los sorteos, también el híbrido y el respaldo).
+Se sube con el mismo título que en YouTube; la descripción va sin capítulos y con los enlaces al sitio y a
+Twitch (que YouTube no permite). Solo actúa con FB_ACTIVO=true, FB_PAGE_ID / FB_PAGE_TOKEN configurados y para
+los sorteos de FB_SORTEOS.
+Si FB_PUBLICAR no es "true", o el compacto tiene avisos (salvo el +18 de YouTube, que acá no aplica), el video
+queda sin publicar en la biblioteca de videos de la página (Meta Business Suite > Contenido) para revisarlo y
+publicarlo a mano.
 
-El enlace se comparte recién cuando el video está público en YouTube. Al subirlo a YouTube, procesar.py deja el
-compartido pendiente en estado/procesados.json ("facebook_pendiente"); cada corrida del workflow mira la privacidad
-de los pendientes en YouTube (`python facebook.py compartir`) y comparte los que ya están públicos; los demás
-siguen pendientes hasta que se publiquen (si el video se borra de YouTube, se descarta).
-Si FB_PUBLICAR no es "true", la publicación queda sin publicar en la página para revisarla y publicarla a mano.
+Mayores de 18: la API no permite restringir por edad cada video; la restricción se configura una sola vez
+para toda la página (Configuración > Restricción de edad > 18+), y así aplica a todo lo que se publica.
 
-Mayores de 18: la restricción se configura una sola vez para toda la página (Configuración > Restricción de edad > 18+).
+FB_ENDPOINT elige cómo se sube: "reels" (API de Reels, /video_reels; máximo 90 s) o "videos" (/videos, el original).
 
 Requiere un token de página permanente con los permisos pages_manage_posts y pages_read_engagement.
 Probar el token:  python facebook.py verificar
-Estado de una publicación compartida:  python facebook.py publicacion POST_ID (workflow "Estado de una publicación en Facebook")
+Estado de un video subido:  python facebook.py estado VIDEO_ID
+Probar la subida por Reels con un clip de 5 s en borrador (no se publica y después se borra):  python facebook.py probar
 """
 import json
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import config
+from formulario import multipart
 
 
 def configurado():
     return bool(config.FB_PAGE_ID and config.FB_PAGE_TOKEN)
 
 
-def activo():
-    """True si hay que compartir en Facebook."""
-    return config.FB_ACTIVO and configurado()
+def activo(sorteo_nombre=None):
+    """True si hay que subir a Facebook (y, con `sorteo_nombre`, si ese sorteo está en FB_SORTEOS)."""
+    if not (config.FB_ACTIVO and configurado()):
+        return False
+    return sorteo_nombre is None or not config.FB_SORTEOS or sorteo_nombre.upper() in config.FB_SORTEOS
 
 
 def _llamar(url, datos=None, tipo=None, timeout=60):
@@ -48,55 +52,47 @@ def _llamar(url, datos=None, tipo=None, timeout=60):
         raise RuntimeError(f"Facebook respondió {e.code}: {detalle}") from None
 
 
-def pendiente(datos, url_youtube):
-    """Lo que se guarda en el registro para compartir el enlace cuando el video esté público en YouTube."""
+def subir(video, datos, publicar, miniatura=None):
+    """Sube el video a la página. Devuelve {video_id, url, publicado}."""
     import youtube  # mismos textos que en YouTube
     titulo, descripcion, _ = youtube.metadatos(datos, facebook=True)
-    return {"url_youtube": url_youtube, "mensaje": f"{titulo}\n\n{descripcion}"}
+    if config.FB_ENDPOINT == "reels":
+        return _subir_reel(video, titulo, descripcion, publicar)
+    campos = {"access_token": config.FB_PAGE_TOKEN, "title": titulo, "description": descripcion,
+              "published": "true" if publicar else "false"}
+    archivos = {"source": Path(video)}
+    if miniatura and Path(miniatura).exists():
+        archivos["thumb"] = Path(miniatura)
+    cuerpo, tipo = multipart(campos, archivos)
+    url = f"https://graph-video.facebook.com/{config.FB_GRAPH_VERSION}/{config.FB_PAGE_ID}/videos"
+    video_id = _llamar(url, cuerpo, tipo, timeout=600)["id"]
+    return {"video_id": video_id, "url": f"https://www.facebook.com/{config.FB_PAGE_ID}/videos/{video_id}",
+            "publicado": publicar}
 
 
-def compartir(url_youtube, mensaje, publicar):
-    """Publica el enlace en el muro de la página. Devuelve {post_id, url, publicado}."""
-    campos = {"message": mensaje, "link": url_youtube, "published": "true" if publicar else "false",
-              "access_token": config.FB_PAGE_TOKEN}
-    post_id = _llamar(f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{config.FB_PAGE_ID}/feed",
-                      urllib.parse.urlencode(campos).encode())["id"]
-    # el enlace armado con el ID no siempre abre: se usa el que da Facebook (con el ID nuevo de la página)
-    url = _consultar(post_id, "permalink_url").get("permalink_url") or f"https://www.facebook.com/{post_id}"
-    return {"post_id": post_id, "url": url, "publicado": publicar}
-
-
-def compartir_pendientes():
-    """Comparte los enlaces pendientes cuyo video ya está público en YouTube y descarta los borrados.
-    Guarda el estado si hubo pendientes."""
-    import telegram
-    import youtube
-    estado = json.loads(config.ESTADO.read_text(encoding="utf-8")) if config.ESTADO.exists() else {}
-    pendientes = {k: r for k, r in estado.items() if r.get("facebook_pendiente")}
-    if not pendientes or not activo():
-        print("Sin enlaces pendientes para Facebook")
-        return
-    privacidad = youtube.privacidades([r["video_id"] for r in pendientes.values()])
-    for clave, r in pendientes.items():
-        p = r["facebook_pendiente"]
-        nombre = r.get("titulo") or r.get("sorteo", clave)
-        if privacidad.get(r["video_id"]) == "public":
-            try:
-                r["facebook"] = compartir(p["url_youtube"], p["mensaje"], config.FB_PUBLICAR)
-            except Exception as e:  # se reintenta en la próxima corrida
-                print(f"No se pudo compartir {nombre} en Facebook: {e}")
-                continue
-            del r["facebook_pendiente"]
-            print(f"Compartido en Facebook: {nombre} {r['facebook']['url']}")
-            telegram.avisar(f"📘 Enlace de YouTube compartido en Facebook "
-                            f"({'publicado' if config.FB_PUBLICAR else 'sin publicar'}):\n{nombre}\n{r['facebook']['url']}")
-        elif r["video_id"] not in privacidad:
-            del r["facebook_pendiente"]
-            r["facebook_omitido"] = "No se compartió en Facebook: el video ya no está en YouTube"
-            print(f"{nombre}: {r['facebook_omitido']}")
-        else:
-            print(f"{nombre}: todavía {privacidad[r['video_id']]} en YouTube")
-    config.ESTADO.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
+def _subir_reel(video, titulo, descripcion, publicar):
+    """Sube por la API de Reels (/video_reels): iniciar, mandar el archivo a rupload y cerrar publicando.
+    Facebook de todos modos convertía en reel lo subido por /videos. Acá no va la miniatura (la API no la recibe)."""
+    base = f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{config.FB_PAGE_ID}/video_reels"
+    token = config.FB_PAGE_TOKEN
+    inicio = _llamar(base, urllib.parse.urlencode({"upload_phase": "start", "access_token": token}).encode())
+    video_id = inicio["video_id"]
+    contenido = Path(video).read_bytes()
+    pedido = urllib.request.Request(
+        inicio.get("upload_url") or f"https://rupload.facebook.com/video-upload/{config.FB_GRAPH_VERSION}/{video_id}",
+        data=contenido, headers={"Authorization": f"OAuth {token}", "offset": "0", "file_size": str(len(contenido))})
+    try:
+        with urllib.request.urlopen(pedido, timeout=600) as r:
+            if not json.load(r).get("success"):
+                raise RuntimeError("Facebook no confirmó la subida del reel")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Facebook respondió {e.code} al subir el reel: {e.read().decode(errors='replace')}") from None
+    fin = {"upload_phase": "finish", "video_id": video_id, "video_state": "PUBLISHED" if publicar else "DRAFT",
+           "title": titulo, "description": descripcion, "access_token": token}
+    if not _llamar(base, urllib.parse.urlencode(fin).encode()).get("success"):
+        raise RuntimeError("Facebook no confirmó la publicación del reel")
+    return {"video_id": video_id, "url": f"https://www.facebook.com/reel/{video_id}", "publicado": publicar,
+            "endpoint": "reels"}
 
 
 def verificar():
@@ -116,28 +112,56 @@ def _consultar(ruta, campos):
         return {"error": str(e)}
 
 
-def publicacion(post_id):
-    """Lo que la API dice de una publicación compartida y de las últimas de la página (para ver por qué no aparece).
-    Los campos van de a uno: si la API no conoce alguno, rechaza toda la consulta."""
-    campos = ("created_time", "is_published", "is_hidden", "is_expired", "permalink_url", "privacy", "status_type",
-              "attachments", "feed_targeting", "timeline_visibility", "message")
-    post = {c: r["error"] if "error" in (r := _consultar(post_id, c)) else r.get(c, "(sin dato)") for c in campos}
-    print(json.dumps({"publicacion": post,
-                      "pagina": _consultar(config.FB_PAGE_ID, "name,is_published,link"),
-                      "ultimas_publicadas": _consultar(f"{config.FB_PAGE_ID}/published_posts",
-                                                       "id,created_time,is_published,permalink_url,status_type"),
-                      "ultimas_del_muro": _consultar(f"{config.FB_PAGE_ID}/feed", "id,created_time,permalink_url")},
+def estado(video_id):
+    """Lo que la API dice de un video subido: procesamiento, publicación y si aparece entre las publicaciones de la
+    página. Para diagnosticar videos que se ven en la computadora pero no en el celular."""
+    video = _consultar(video_id, "id,title,published,created_time,length,permalink_url,privacy,status")
+    pagina = _consultar(config.FB_PAGE_ID, "id,name,is_published")
+    posts = _consultar(f"{config.FB_PAGE_ID}/posts", "id,created_time,is_published,permalink_url")
+    # campos que delatan bloqueos (copyright, segmentación, publicación oculta); de a uno, porque si la API no
+    # conoce alguno rechaza toda la consulta
+    def de_a_uno(ruta, campos):
+        return {c: r["error"] if "error" in (r := _consultar(ruta, c)) else r.get(c, "(sin dato)") for c in campos}
+
+    extra_video = de_a_uno(video_id, ("copyright_check_information", "embeddable", "is_crossposting_eligible",
+                                      "content_category", "post_id", "is_instagram_eligible"))
+    publicacion = next((p for p in posts.get("data", []) if video_id in p.get("permalink_url", "")), None)
+    extra_post = de_a_uno(publicacion["id"], ("is_hidden", "is_expired", "is_eligible_for_promotion", "privacy",
+                                              "status_type", "feed_targeting", "targeting")) if publicacion else {}
+    extra_pagina = de_a_uno(config.FB_PAGE_ID, ("is_always_open", "is_permanently_closed", "is_unclaimed",
+                                                "restrictions", "verification_status"))
+    print(json.dumps({"video": video, "video_extra": extra_video, "publicacion": publicacion, "publicacion_extra": extra_post,
+                      "pagina": pagina, "pagina_extra": extra_pagina,
+                      "ultimas_publicaciones": posts["data"][:5] if "data" in posts else posts},
                      ensure_ascii=False, indent=2))
 
 
+def probar():
+    """Sube por /video_reels un clip de prueba como borrador, muestra su estado y lo borra."""
+    import subprocess
+    import tempfile
+    clip = Path(tempfile.mkdtemp()) / "prueba.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=5",
+                    "-f", "lavfi", "-i", "sine=d=5", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                    "-shortest", str(clip)], check=True)
+    r = _subir_reel(clip, "Prueba de subida (borrador)", "Prueba", publicar=False)
+    print(f"Subido en borrador: {r['video_id']}")
+    import time
+    time.sleep(20)  # que Facebook alcance a procesarlo
+    estado(r["video_id"])
+    borrado = _llamar(f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{r['video_id']}?"
+                      + urllib.parse.urlencode({"access_token": config.FB_PAGE_TOKEN, "method": "delete"}))
+    print(f"Borrado: {borrado}")
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["publicacion"] and len(sys.argv) == 3:
-        publicacion(sys.argv[2])
-    elif sys.argv[1:] == ["verificar"]:
-        if not configurado():
-            sys.exit("Faltan FB_PAGE_ID y FB_PAGE_TOKEN")
+    if sys.argv[1:2] in (["verificar"], ["estado"], ["probar"]) and not configurado():
+        sys.exit("Faltan FB_PAGE_ID y FB_PAGE_TOKEN")
+    if sys.argv[1:] == ["verificar"]:
         verificar()
-    elif sys.argv[1:] == ["compartir"]:
-        compartir_pendientes()
+    elif sys.argv[1:2] == ["estado"] and len(sys.argv) == 3:
+        estado(sys.argv[2])
+    elif sys.argv[1:] == ["probar"]:
+        probar()
     else:
         print(__doc__)

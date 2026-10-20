@@ -1,7 +1,7 @@
 # Compactos de sorteos
 
 Arma automáticamente un compacto de ~90 segundos de cada sorteo de la Tómbola transmitido por Twitch
-y lo sube a YouTube (y, opcionalmente, comparte el enlace en la página de Facebook).
+y lo sube a YouTube (y, opcionalmente, a la página de Facebook).
 
 **Compacto (90 s):** intro (logo + nombre, número y fecha del sorteo) → bienvenida del locutor →
 los 50 s previos a "a la cabeza" y 15 s después → captura del tablero final (10 s). La cortina musical
@@ -51,7 +51,7 @@ hasta 3 veces.
 
 Si el locutor canta "a la cabeza" pero el tablero de resultados nunca aparece en la transmisión, se arma el compacto con el video del locutor como siempre y el cierre (y la miniatura) es la placa
 con el extracto oficial de la API, la misma del respaldo. Los datos salen del cronograma y la cabeza del extracto,
-controlada con la que cantó el locutor. Se sube **privado** con aviso. Si el extracto
+controlada con la que cantó el locutor. Se sube **privado** con aviso y es solo para YouTube. Si el extracto
 todavía no está publicado, el VOD espera a la próxima corrida sin gastar un intento.
 
 ### Compacto de respaldo
@@ -61,7 +61,8 @@ Si un sorteo del cronograma se queda sin compacto (no hubo VOD en Twitch o el VO
 Lotería (`LOTERIA_API_EXTRACTO`): la misma intro y una placa con la cabeza y
 los 20 números, con la cortina de fondo. Si el extracto todavía no está publicado, se vuelve a mirar en la
 próxima corrida (hasta 24 h después del sorteo). Siempre se sube **privado** para revisarlo; la descripción
-incluye los 20 números. Para forzarlo: Run workflow con "respaldo" = `14/10/2026 15:00`, o localmente
+incluye los 20 números. Es solo para YouTube: no se sube a Facebook (ahí el extracto se publica aparte, como
+imagen). Para forzarlo: Run workflow con "respaldo" = `14/10/2026 15:00`, o localmente
 `python respaldo.py 14/10/2026 15:00` (arma sin subir).
 
 ### Cronograma
@@ -86,9 +87,11 @@ Repositorio **privado** en una cuenta u organización de la Lotería (no persona
 | Variable | `YT_PLAYLIST` | opcional: playlist de todos los compactos (por defecto `PLQw-MqYiPuUc`, "SORTEOS OFICIALES"); vacía = ninguna |
 | Variable | `YT_PLAYLISTS` | opcional: `{"MATUTINA": "PL...", "VESPERTINA": "PL...", ...}` |
 | Secreto | `YT_TOKEN_JSON` | contenido de `token.json` (ver abajo) |
-| Variable | `FB_ACTIVO` | `true` para compartir en Facebook; `false` (o sin definir) no comparte nada aunque haya credenciales |
+| Variable | `FB_ACTIVO` | `true` para subir a Facebook; `false` (o sin definir) no sube nada aunque haya credenciales |
 | Variable | `FB_PAGE_ID` | opcional: ID de la página de Facebook (ver abajo) |
-| Variable | `FB_PUBLICAR` | `false` para arrancar (comparte sin publicar); `true` para publicar directo |
+| Variable | `FB_PUBLICAR` | `false` para arrancar (sube sin publicar); `true` para publicar directo |
+| Variable | `FB_SORTEOS` | opcional: sorteos que van a Facebook (por defecto `VESPERTINA,NOCTURNA`; vacía = todos) |
+| Variable | `FB_ENDPOINT` | opcional: `reels` (por defecto, API de Reels, máx. 90 s) o `videos` (endpoint `/videos`) |
 | Secreto | `FB_PAGE_TOKEN` | opcional: token de página permanente de Facebook |
 | Secreto | `TELEGRAM_TOKEN` | opcional: token del bot de avisos (ver abajo) |
 | Secreto | `TELEGRAM_CHAT_ID` | opcional: chat donde llegan los avisos |
@@ -100,19 +103,17 @@ los videos con avisos ya no ponen la corrida en rojo (el mail de GitHub queda so
 2. Mandarle cualquier mensaje al bot nuevo (o agregarlo a un grupo), abrir
    `https://api.telegram.org/bot<TOKEN>/getUpdates` y copiar el número de `"chat":{"id": ...}`.
 
-**Facebook (opcional):** con `FB_ACTIVO=true`, `FB_PAGE_ID` y `FB_PAGE_TOKEN` no se sube el video a Facebook: se
-comparte en la página el **enlace de YouTube** de **todos** los compactos (todos los sorteos, también el híbrido y el respaldo), con el mismo título; el texto
-lleva los enlaces a loteriadesalta.com y al canal de Twitch (YouTube no los permite). El enlace se comparte recién
-cuando el video está **público** en YouTube: al subirlo queda pendiente en `estado/procesados.json` y en cada corrida
-el job `facebook` del workflow revisa la privacidad en YouTube y comparte los que ya se publicaron (por ejemplo,
-después de marcar el +18 a mano en YouTube Studio). Con `FB_PUBLICAR=false` la publicación queda sin publicar en la
-página (Meta Business Suite → Contenido) para revisarla.
-- Mientras el video no esté público, el enlace sigue pendiente (sin límite de tiempo). El job corre con cada
-  revisión del workflow, así que un video publicado tarde se comparte en la próxima corrida (como muy tarde, en las
-  revisiones del sorteo siguiente). Si el video se borra de YouTube, se descarta.
+**Facebook (opcional):** con `FB_ACTIVO=true`, `FB_PAGE_ID` y `FB_PAGE_TOKEN` cada compacto subido a YouTube de los sorteos
+de `FB_SORTEOS` se sube también a la página, con el mismo título; la descripción es más corta (sin La Changuita, Tómbola Total, horarios ni teléfonos) y lleva
+los enlaces a loteriadesalta.com, al canal de Twitch y al canal de YouTube (YouTube no permite enlaces). Con `FB_PUBLICAR=false`, o si el compacto tiene avisos (salvo el de +18
+de YouTube: en Facebook la restricción de edad es de toda la página), queda sin publicar
+en la biblioteca de videos de la página (Meta Business Suite → Contenido) para revisarlo. Si falla Facebook, el
+compacto no se reintenta (ya está en YouTube): llega como aviso.
+- Solo va a Facebook el compacto normal (no el híbrido ni el respaldo), y solo si queda listo dentro de
+  `FB_LIMITE_MIN` (por defecto 60) desde la hora del sorteo: después ya se publicó el extracto como imagen.
 - El token tiene que ser **de página** y permanente, con `pages_manage_posts` y `pages_read_engagement`.
   Probarlo: `set FB_PAGE_ID=...` / `set FB_PAGE_TOKEN=...` y `python facebook.py verificar`.
-- **+18:** configurarlo una vez para toda la página
+- **+18:** la API no restringe por edad cada video. Configurarlo una vez para toda la página
   (Configuración → Restricción de edad → 18+).
 
 ### 3. Token de YouTube

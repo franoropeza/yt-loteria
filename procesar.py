@@ -13,7 +13,7 @@ En YouTube hay tres casos:
   - compacto normal: video del locutor y cierre con el tablero de la transmisión;
   - compacto híbrido: el tablero no apareció en la transmisión, el cierre es la placa con el extracto oficial;
   - respaldo: no hubo VOD o se abandonó, solo intro + placa con el extracto oficial (ver respaldo.py).
-En Facebook se comparte el enlace de YouTube de todos los compactos, cuando el video queda público (ver facebook.py).
+A Facebook va solo el compacto normal, y solo si está listo dentro de FB_LIMITE_MIN desde la hora del sorteo.
 """
 import argparse
 import datetime as dt
@@ -82,7 +82,7 @@ def procesar_respaldo(fila, subir):
 
 
 def publicar(info, subir):
-    """Sube el compacto a YouTube (y deja pendiente compartirlo en Facebook) y avisa por Telegram. Devuelve el registro para estado/procesados.json."""
+    """Sube el compacto a YouTube (y Facebook) y avisa por Telegram. Devuelve el registro para estado/procesados.json."""
     registro = {"estado": "armado", "sorteo": f"{info['sorteo_nombre']} {info['sorteo_numero']}",
                 "fecha": info["fecha"], "cabeza": info["cabeza"], "avisos": info["avisos"],
                 "compacto": os.path.basename(info["compacto"])}
@@ -92,13 +92,34 @@ def publicar(info, subir):
         privacidad = "private" if info["avisos"] else config.YT_PRIVACIDAD
         registro.update(youtube.subir(info["compacto"], info, privacidad, info["miniatura"]), estado="ok")
         registro["avisos"] += registro.pop("avisos_youtube")
+        # el +18 de YouTube no frena a Facebook: ahí la restricción de edad es de toda la página
+        fb_publicar = config.FB_PUBLICAR and not registro["avisos"]
         if not registro["mayores_18"]:
             registro["avisos"].append("No se pudo marcar +18 por la API: marcarlo en YouTube Studio "
                                       "(Detalles > Público > Restricción de edad) y recién ahí publicarlo")
-        if facebook.activo():  # se comparte cuando el video quede público en YouTube (facebook.py compartir)
-            registro["facebook_pendiente"] = facebook.pendiente(info, registro["url"])
+        # el respaldo y el híbrido (con extracto) son solo para YouTube: en Facebook el extracto se publica como
+        # imagen aparte, y pasado FB_LIMITE_MIN desde el sorteo tampoco se sube el compacto normal
+        if info.get("extracto") or not facebook.activo(info["sorteo_nombre"]):
+            pass
+        elif not a_tiempo_facebook(info):
+            registro["facebook_omitido"] = f"Pasaron más de {config.FB_LIMITE_MIN} min del sorteo: no se sube a Facebook"
+        else:
+            try:  # con avisos de contenido queda sin publicar para revisarlo
+                registro["facebook"] = facebook.subir(info["compacto"], info, fb_publicar, info["miniatura"])
+            except Exception as e:  # no se reintenta: volvería a subirlo a YouTube
+                traceback.print_exc()
+                registro["avisos"].append(f"No se pudo subir a Facebook: {e}")
     telegram.avisar(telegram.texto_compacto(registro), Path(info["miniatura"]))
     return registro
+
+
+def a_tiempo_facebook(info, ahora=None):
+    """True si todavía no pasaron FB_LIMITE_MIN desde la hora del sorteo."""
+    try:
+        hora = dt.datetime.strptime(f"{info['fecha']} {info['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
+    except (KeyError, ValueError):  # sin hora confiable (sorteo fuera del cronograma): no se arriesga
+        return False
+    return (ahora or dt.datetime.now(config.ARG)) - hora <= dt.timedelta(minutes=config.FB_LIMITE_MIN)
 
 
 def extracto_publicado(fila):
@@ -133,9 +154,10 @@ def resumen(filas):
         return "Sin VODs nuevos.\n"
     md = ["| VOD | Sorteo | Cabeza | Estado | YouTube | Facebook | Avisos |", "|---|---|---|---|---|---|---|"]
     for vod_id, r in filas:
+        fb = r.get("facebook") or {}
         md.append(f"| {vod_id} | {r.get('sorteo', '')} {r.get('fecha', '')} | {r.get('cabeza', '')} | {r['estado']} | "
                   f"{r.get('url', '')} {r.get('privacidad', '')} | "
-                  f"{'pendiente (cuando esté público en YouTube)' if r.get('facebook_pendiente') else ''} | "
+                  f"{fb.get('url', '')} {'' if not fb else 'publicado' if fb['publicado'] else 'sin publicar'} | "
                   f"{'; '.join(r.get('avisos', [])) or r.get('error', '')} |")
     return "\n".join(md) + "\n"
 
