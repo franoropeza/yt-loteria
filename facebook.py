@@ -61,7 +61,9 @@ def compartir(url_youtube, mensaje, publicar):
               "access_token": config.FB_PAGE_TOKEN}
     post_id = _llamar(f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{config.FB_PAGE_ID}/feed",
                       urllib.parse.urlencode(campos).encode())["id"]
-    return {"post_id": post_id, "url": f"https://www.facebook.com/{post_id}", "publicado": publicar}
+    # el enlace armado con el ID no siempre abre: se usa el que da Facebook (con el ID nuevo de la página)
+    url = _consultar(post_id, "permalink_url").get("permalink_url") or f"https://www.facebook.com/{post_id}"
+    return {"post_id": post_id, "url": url, "publicado": publicar}
 
 
 def compartir_pendientes():
