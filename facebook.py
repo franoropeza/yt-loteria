@@ -15,6 +15,7 @@ Mayores de 18: la restricción se configura una sola vez para toda la página (C
 
 Requiere un token de página permanente con los permisos pages_manage_posts y pages_read_engagement.
 Probar el token:  python facebook.py verificar
+Estado de una publicación compartida:  python facebook.py publicacion POST_ID (workflow "Estado de una publicación en Facebook")
 """
 import json
 import sys
@@ -105,8 +106,32 @@ def verificar():
         print(f"⚠️ FB_PAGE_ID es {config.FB_PAGE_ID}: no coincide con la página del token")
 
 
+def _consultar(ruta, campos):
+    consulta = urllib.parse.urlencode({"fields": campos, "access_token": config.FB_PAGE_TOKEN})
+    try:
+        return _llamar(f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{ruta}?{consulta}")
+    except RuntimeError as e:
+        return {"error": str(e)}
+
+
+def publicacion(post_id):
+    """Lo que la API dice de una publicación compartida y de las últimas de la página (para ver por qué no aparece).
+    Los campos van de a uno: si la API no conoce alguno, rechaza toda la consulta."""
+    campos = ("created_time", "is_published", "is_hidden", "is_expired", "permalink_url", "privacy", "status_type",
+              "attachments", "feed_targeting", "timeline_visibility", "message")
+    post = {c: r["error"] if "error" in (r := _consultar(post_id, c)) else r.get(c, "(sin dato)") for c in campos}
+    print(json.dumps({"publicacion": post,
+                      "pagina": _consultar(config.FB_PAGE_ID, "name,is_published,link"),
+                      "ultimas_publicadas": _consultar(f"{config.FB_PAGE_ID}/published_posts",
+                                                       "id,created_time,is_published,permalink_url,status_type"),
+                      "ultimas_del_muro": _consultar(f"{config.FB_PAGE_ID}/feed", "id,created_time,permalink_url")},
+                     ensure_ascii=False, indent=2))
+
+
 if __name__ == "__main__":
-    if sys.argv[1:] == ["verificar"]:
+    if sys.argv[1:2] == ["publicacion"] and len(sys.argv) == 3:
+        publicacion(sys.argv[2])
+    elif sys.argv[1:] == ["verificar"]:
         if not configurado():
             sys.exit("Faltan FB_PAGE_ID y FB_PAGE_TOKEN")
         verificar()
