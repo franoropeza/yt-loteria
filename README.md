@@ -95,7 +95,7 @@ Repositorio **privado** en una cuenta u organización de la Lotería (no persona
 | Secreto | `FB_PAGE_TOKEN` | opcional: token de página permanente de Facebook |
 | Secreto | `TELEGRAM_TOKEN` | opcional: token del bot de avisos (ver abajo) |
 | Secreto | `TELEGRAM_CHAT_ID` | opcional: chat donde llegan los avisos |
-| Variable | `TELEGRAM_CANAL_CHAT_ID` | opcional: canal público donde se comparte el enlace de YouTube (`@usuario` o `-100...`) |
+| Variable o secreto | `TELEGRAM_CANAL_CHAT_ID` | opcional: canal público donde se comparte el enlace de YouTube (`@usuario` o `-100...`) |
 | Secreto | `TELEGRAM_CANAL_TOKEN` | opcional: token del bot que publica en el canal (vacío = el bot de los avisos) |
 
 **Avisos por Telegram (opcional):** con estos dos secretos llega un mensaje por cada compacto subido (miniatura,

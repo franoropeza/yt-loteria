@@ -102,7 +102,7 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_CANAL_TOKEN: ${{ secrets.TELEGRAM_CANAL_TOKEN }}
-          TELEGRAM_CANAL_CHAT_ID: ${{ vars.TELEGRAM_CANAL_CHAT_ID }}
+          TELEGRAM_CANAL_CHAT_ID: ${{ secrets.TELEGRAM_CANAL_CHAT_ID || vars.TELEGRAM_CANAL_CHAT_ID }}
           VOD: ${{ inputs.vod }}
           RESPALDO: ${{ inputs.respaldo }}
           SIN_SUBIR: ${{ inputs.sin_subir }}
@@ -164,7 +164,7 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_CANAL_TOKEN: ${{ secrets.TELEGRAM_CANAL_TOKEN }}
-          TELEGRAM_CANAL_CHAT_ID: ${{ vars.TELEGRAM_CANAL_CHAT_ID }}
+          TELEGRAM_CANAL_CHAT_ID: ${{ secrets.TELEGRAM_CANAL_CHAT_ID || vars.TELEGRAM_CANAL_CHAT_ID }}
         run: python compartir.py
       - name: Guardar estado en el repo
         run: |
