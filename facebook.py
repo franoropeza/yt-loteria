@@ -7,6 +7,9 @@ Si FB_PUBLICAR no es "true", o el compacto tiene avisos (salvo el +18 de YouTube
 queda sin publicar en la biblioteca de videos de la página (Meta Business Suite > Contenido) para revisarlo y
 publicarlo a mano.
 
+De los demás sorteos no se sube el video: se comparte en el muro el enlace de YouTube, recién cuando el video está
+público y solo si eso pasa dentro de FB_LIMITE_MIN desde el sorteo (ver compartir.py).
+
 Mayores de 18: la API no permite restringir por edad cada video; la restricción se configura una sola vez
 para toda la página (Configuración > Restricción de edad > 18+), y así aplica a todo lo que se publica.
 
@@ -17,6 +20,7 @@ Probar el token:  python facebook.py verificar
 Estado de un video subido:  python facebook.py estado VIDEO_ID
 Probar la subida por Reels con un clip de 5 s en borrador (no se publica y después se borra):  python facebook.py probar
 """
+import datetime as dt
 import json
 import sys
 import urllib.error
@@ -37,6 +41,40 @@ def activo(sorteo_nombre=None):
     if not (config.FB_ACTIVO and configurado()):
         return False
     return sorteo_nombre is None or not config.FB_SORTEOS or sorteo_nombre.upper() in config.FB_SORTEOS
+
+
+def comparte_enlace(sorteo_nombre):
+    """True si del sorteo se comparte en la página el enlace de YouTube: los que no están en FB_SORTEOS (esos se
+    suben como video)."""
+    return activo() and not activo(sorteo_nombre)
+
+
+def limite(info):
+    """Hasta cuándo se publica en Facebook: FB_LIMITE_MIN desde la hora del sorteo (después ya se publicó el extracto
+    como imagen). None si no hay hora confiable (sorteo fuera del cronograma): no se arriesga."""
+    try:
+        hora = dt.datetime.strptime(f"{info['fecha']} {info['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
+    except (KeyError, ValueError):
+        return None
+    return hora + dt.timedelta(minutes=config.FB_LIMITE_MIN)
+
+
+def mensaje(datos):
+    """Texto de la publicación con el enlace: el mismo título y descripción que el video subido a Facebook."""
+    import youtube
+    titulo, descripcion, _ = youtube.metadatos(datos, facebook=True)
+    return f"{titulo}\n\n{descripcion}"
+
+
+def compartir(url_youtube, texto, publicar):
+    """Publica el enlace de YouTube en el muro de la página. Devuelve {post_id, url, publicado}."""
+    campos = {"message": texto, "link": url_youtube, "published": "true" if publicar else "false",
+              "access_token": config.FB_PAGE_TOKEN}
+    post_id = _llamar(f"https://graph.facebook.com/{config.FB_GRAPH_VERSION}/{config.FB_PAGE_ID}/feed",
+                      urllib.parse.urlencode(campos).encode())["id"]
+    # el enlace armado con el ID no siempre abre: se usa el que da Facebook
+    url = _consultar(post_id, "permalink_url").get("permalink_url") or f"https://www.facebook.com/{post_id}"
+    return {"post_id": post_id, "url": url, "publicado": publicar, "enlace": True}
 
 
 def _llamar(url, datos=None, tipo=None, timeout=60):

@@ -14,6 +14,8 @@ En YouTube hay tres casos:
   - compacto híbrido: el tablero no apareció en la transmisión, el cierre es la placa con el extracto oficial;
   - respaldo: no hubo VOD o se abandonó, solo intro + placa con el extracto oficial (ver respaldo.py).
 A Facebook va solo el compacto normal, y solo si está listo dentro de FB_LIMITE_MIN desde la hora del sorteo.
+De los demás sorteos se comparte en Facebook el enlace de YouTube, y en el canal de Telegram el de todos, cuando el
+video queda público (ver compartir.py).
 """
 import argparse
 import datetime as dt
@@ -24,6 +26,7 @@ import sys
 import traceback
 from pathlib import Path
 
+import compartir
 import config
 import cronograma
 import facebook
@@ -109,17 +112,20 @@ def publicar(info, subir):
             except Exception as e:  # no se reintenta: volvería a subirlo a YouTube
                 traceback.print_exc()
                 registro["avisos"].append(f"No se pudo subir a Facebook: {e}")
+        try:  # el enlace se comparte cuando el video quede público en YouTube (compartir.py)
+            if pendiente := compartir.pendiente(info, registro["url"], registro["titulo"]):
+                registro["compartir_pendiente"] = pendiente
+        except Exception as e:
+            traceback.print_exc()
+            registro["avisos"].append(f"No se pudo dejar pendiente compartir el enlace: {e}")
     telegram.avisar(telegram.texto_compacto(registro), Path(info["miniatura"]))
     return registro
 
 
 def a_tiempo_facebook(info, ahora=None):
     """True si todavía no pasaron FB_LIMITE_MIN desde la hora del sorteo."""
-    try:
-        hora = dt.datetime.strptime(f"{info['fecha']} {info['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
-    except (KeyError, ValueError):  # sin hora confiable (sorteo fuera del cronograma): no se arriesga
-        return False
-    return (ahora or dt.datetime.now(config.ARG)) - hora <= dt.timedelta(minutes=config.FB_LIMITE_MIN)
+    limite = facebook.limite(info)
+    return bool(limite) and (ahora or dt.datetime.now(config.ARG)) <= limite
 
 
 def extracto_publicado(fila):
@@ -157,7 +163,8 @@ def resumen(filas):
         fb = r.get("facebook") or {}
         md.append(f"| {vod_id} | {r.get('sorteo', '')} {r.get('fecha', '')} | {r.get('cabeza', '')} | {r['estado']} | "
                   f"{r.get('url', '')} {r.get('privacidad', '')} | "
-                  f"{fb.get('url', '')} {'' if not fb else 'publicado' if fb['publicado'] else 'sin publicar'} | "
+                  f"{fb.get('url', '')} {'' if not fb else 'publicado' if fb['publicado'] else 'sin publicar'}"
+                  f"{'enlace pendiente' if 'facebook' in (r.get('compartir_pendiente') or {}).get('destinos', []) else ''} | "
                   f"{'; '.join(r.get('avisos', [])) or r.get('error', '')} |")
     return "\n".join(md) + "\n"
 

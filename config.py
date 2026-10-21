@@ -49,6 +49,10 @@ FB_LIMITE_MIN = int(os.environ.get("FB_LIMITE_MIN", "60"))
 # avisos por Telegram (opcional, ver telegram.py)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+# canal público de Telegram donde se comparte el enlace de YouTube de cada compacto (ver compartir.py).
+# El bot tiene que ser administrador del canal; sin TELEGRAM_CANAL_TOKEN se usa el bot de los avisos.
+TELEGRAM_CANAL_TOKEN = os.environ.get("TELEGRAM_CANAL_TOKEN", "") or TELEGRAM_TOKEN
+TELEGRAM_CANAL_CHAT_ID = os.environ.get("TELEGRAM_CANAL_CHAT_ID", "")  # @usuario del canal o -100...
 
 # --- Armado del video ---
 FUENTE = ASSETS / "Poppins-Bold.ttf"

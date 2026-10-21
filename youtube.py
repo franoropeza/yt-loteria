@@ -170,6 +170,16 @@ def subir(video, datos, privacidad, miniatura=None):
             "privacidad": privacidad_final, "mayores_18": mayores_18, "avisos_youtube": avisos}
 
 
+def privacidades(video_ids):
+    """{video_id: privacyStatus} de los videos indicados (1 unidad de cuota cada 50 videos); los borrados no figuran."""
+    yt = build("youtube", "v3", credentials=credenciales(), cache_discovery=False)
+    resultado = {}
+    for i in range(0, len(video_ids), 50):
+        respuesta = yt.videos().list(part="status", id=",".join(video_ids[i:i + 50])).execute()
+        resultado.update({v["id"]: v["status"]["privacyStatus"] for v in respuesta.get("items", [])})
+    return resultado
+
+
 def autorizar(client_secret):
     from google_auth_oauthlib.flow import InstalledAppFlow
     flow = InstalledAppFlow.from_client_secrets_file(client_secret, SCOPES)

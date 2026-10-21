@@ -101,6 +101,8 @@ jobs:
           FB_ENDPOINT: ${{ vars.FB_ENDPOINT || 'reels' }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CANAL_TOKEN: ${{ secrets.TELEGRAM_CANAL_TOKEN }}
+          TELEGRAM_CANAL_CHAT_ID: ${{ vars.TELEGRAM_CANAL_CHAT_ID }}
           VOD: ${{ inputs.vod }}
           RESPALDO: ${{ inputs.respaldo }}
           SIN_SUBIR: ${{ inputs.sin_subir }}
@@ -134,3 +136,39 @@ jobs:
         run: |
           [ -n "$TELEGRAM_TOKEN" ] || exit 0
           curl -sS -o /dev/null "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage"             --data-urlencode "chat_id=$TELEGRAM_CHAT_ID"             --data-urlencode "text=❌ Falló la corrida de compactos (procesamiento). Ver el detalle: $URL"
+
+  # Comparte el enlace de YouTube de los compactos que ya están públicos: en Facebook (sorteos que no van como video)
+  # y en el canal de Telegram (todos). Ver compartir.py. Corre siempre, haya habido VODs o no: el video puede pasar a
+  # público a mano entre una corrida y otra.
+  compartir:
+    needs: [detectar, procesar]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install google-api-python-client==2.201.0 google-auth==2.62.0
+      - name: Compartir enlaces pendientes
+        env:
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
+          FB_ACTIVO: ${{ vars.FB_ACTIVO || 'false' }}
+          FB_PAGE_ID: ${{ vars.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          FB_PUBLICAR: ${{ vars.FB_PUBLICAR || 'false' }}
+          FB_SORTEOS: ${{ vars.FB_SORTEOS || 'VESPERTINA,NOCTURNA' }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CANAL_TOKEN: ${{ secrets.TELEGRAM_CANAL_TOKEN }}
+          TELEGRAM_CANAL_CHAT_ID: ${{ vars.TELEGRAM_CANAL_CHAT_ID }}
+        run: python compartir.py
+      - name: Guardar estado en el repo
+        run: |
+          git config user.name "compactos-bot"
+          git config user.email "compactos-bot@users.noreply.github.com"
+          git add estado/
+          git diff --cached --quiet || (git commit -m "Enlaces compartidos $(date -u +%F' '%H:%M)" && { git push || { git pull --rebase && git push; }; })

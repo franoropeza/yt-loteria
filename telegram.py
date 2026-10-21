@@ -16,8 +16,12 @@ def configurado():
     return bool(config.TELEGRAM_TOKEN and config.TELEGRAM_CHAT_ID)
 
 
-def _llamar(metodo, campos, archivo=None):
-    url = f"https://api.telegram.org/bot{config.TELEGRAM_TOKEN}/{metodo}"
+def canal_configurado():
+    return bool(config.TELEGRAM_CANAL_TOKEN and config.TELEGRAM_CANAL_CHAT_ID)
+
+
+def _llamar(metodo, campos, archivo=None, token=None):
+    url = f"https://api.telegram.org/bot{token or config.TELEGRAM_TOKEN}/{metodo}"
     if archivo is None:
         datos, tipo = json.dumps(campos).encode(), "application/json"
     else:
@@ -42,6 +46,16 @@ def avisar(texto, foto=None):
         print(f"No se pudo avisar por Telegram: {e}")
 
 
+def publicar_en_canal(titulo, url_youtube):
+    """Publica en el canal el enlace de YouTube (Telegram arma la vista previa con la miniatura).
+    Devuelve {message_id, url}; si falla, lanza la excepción (compartir.py lo reintenta)."""
+    mensaje = _llamar("sendMessage", {"chat_id": config.TELEGRAM_CANAL_CHAT_ID, "text": f"{titulo}\n{url_youtube}"},
+                      token=config.TELEGRAM_CANAL_TOKEN)["result"]
+    usuario = mensaje["chat"].get("username")
+    return {"message_id": mensaje["message_id"],
+            "url": f"https://t.me/{usuario}/{mensaje['message_id']}" if usuario else ""}
+
+
 def texto_compacto(registro):
     """Mensaje para un compacto subido (o armado sin subir)."""
     lineas = [f"🎬 {registro.get('titulo') or registro.get('sorteo', '') + ' ' + registro.get('fecha', '')}",
@@ -54,6 +68,8 @@ def texto_compacto(registro):
             lineas.append(f"Facebook ({'publicado' if fb['publicado'] else 'sin publicar'}): {fb['url']}")
         elif omitido := registro.get("facebook_omitido"):
             lineas.append(omitido)
+        if destinos := (registro.get("compartir_pendiente") or {}).get("destinos"):
+            lineas.append(f"Enlace a {' y '.join(d.title() for d in destinos)}: cuando el video esté público en YouTube")
     else:
         lineas.append("Armado sin subir (prueba)")
     if avisos := registro.get("avisos"):

@@ -95,6 +95,8 @@ Repositorio **privado** en una cuenta u organización de la Lotería (no persona
 | Secreto | `FB_PAGE_TOKEN` | opcional: token de página permanente de Facebook |
 | Secreto | `TELEGRAM_TOKEN` | opcional: token del bot de avisos (ver abajo) |
 | Secreto | `TELEGRAM_CHAT_ID` | opcional: chat donde llegan los avisos |
+| Variable | `TELEGRAM_CANAL_CHAT_ID` | opcional: canal público donde se comparte el enlace de YouTube (`@usuario` o `-100...`) |
+| Secreto | `TELEGRAM_CANAL_TOKEN` | opcional: token del bot que publica en el canal (vacío = el bot de los avisos) |
 
 **Avisos por Telegram (opcional):** con estos dos secretos llega un mensaje por cada compacto subido (miniatura,
 cabeza, avisos y link para revisarlo y publicarlo en YouTube Studio) y por cada falla. Con Telegram configurado,
@@ -115,6 +117,19 @@ compacto no se reintenta (ya está en YouTube): llega como aviso.
   Probarlo: `set FB_PAGE_ID=...` / `set FB_PAGE_TOKEN=...` y `python facebook.py verificar`.
 - **+18:** la API no restringe por edad cada video. Configurarlo una vez para toda la página
   (Configuración → Restricción de edad → 18+).
+
+**Enlaces de YouTube (Facebook y canal de Telegram):** de los sorteos que no están en `FB_SORTEOS` (Matutina, Extra,
+La Revancha) no se sube el video: se comparte en el muro de la página el **enlace de YouTube**, con el mismo texto
+que llevaría el video (`FB_PUBLICAR=false` lo deja sin publicar). Misma regla que el video: solo el compacto normal
+(no el híbrido ni el respaldo) y solo si el video queda **público** en YouTube dentro de `FB_LIMITE_MIN` (60 min)
+desde la hora del sorteo; si no, no se publica nada en Facebook. Con `TELEGRAM_CANAL_CHAT_ID` se publica además en el
+canal de Telegram el título y el enlace de **todos** los compactos (normal, híbrido y respaldo), sin límite de tiempo.
+El enlace se comparte recién cuando el video está **público** en YouTube: al subirlo queda pendiente en
+`estado/procesados.json` y en cada corrida el job `compartir` del workflow (`python compartir.py`) revisa la
+privacidad en YouTube y comparte los que ya se publicaron (por ejemplo, después de marcar el +18 a mano). Si un
+destino falla se reintenta en la corrida siguiente; si el video se borra de YouTube, se descarta.
+- El bot del canal tiene que ser **administrador** del canal con permiso para publicar. Puede ser el bot del
+  autopublicador de extractos (su token en `TELEGRAM_CANAL_TOKEN`) o el de los avisos agregado como administrador.
 
 ### 3. Token de YouTube
 En una PC con el `client_secret.json` del proyecto de Google Cloud:
