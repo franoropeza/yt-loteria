@@ -7,7 +7,8 @@ Si FB_PUBLICAR no es "true", o el compacto tiene avisos (salvo el +18 de YouTube
 queda sin publicar en la biblioteca de videos de la página (Meta Business Suite > Contenido) para revisarlo y
 publicarlo a mano.
 
-De los demás sorteos no se sube el video: se comparte en el muro el enlace de YouTube, recién cuando el video está
+De los demás sorteos, y de los de FB_SORTEOS cuya cabeza no se pudo identificar bien (el título se corrige a mano en
+YouTube), no se sube el video: se comparte en el muro el enlace de YouTube, recién cuando el video está
 público y solo si eso pasa dentro de FB_LIMITE_MIN desde el sorteo (ver compartir.py).
 
 Mayores de 18: la API no permite restringir por edad cada video; la restricción se configura una sola vez

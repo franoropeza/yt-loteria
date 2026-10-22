@@ -113,6 +113,10 @@ en la biblioteca de videos de la página (Meta Business Suite → Contenido) par
 compacto no se reintenta (ya está en YouTube): llega como aviso.
 - Solo va a Facebook el compacto normal (no el híbrido ni el respaldo), y solo si queda listo dentro de
   `FB_LIMITE_MIN` (por defecto 60) desde la hora del sorteo: después ya se publicó el extracto como imagen.
+- Si la cabeza no se pudo identificar bien (el tablero no coincide con lo que cantó el locutor, no se leyó, o no se
+  confirmó con "ubicación uno"), no se sube el video: se corrige el título a mano en YouTube y, cuando queda
+  **público**, se comparte el enlace de YouTube como con los demás sorteos (ver abajo), con la cabeza que figure en
+  ese momento en el título.
 - El token tiene que ser **de página** y permanente, con `pages_manage_posts` y `pages_read_engagement`.
   Probarlo: `set FB_PAGE_ID=...` / `set FB_PAGE_TOKEN=...` y `python facebook.py verificar`.
 - **+18:** la API no restringe por edad cada video. Configurarlo una vez para toda la página

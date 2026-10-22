@@ -170,13 +170,15 @@ def subir(video, datos, privacidad, miniatura=None):
             "privacidad": privacidad_final, "mayores_18": mayores_18, "avisos_youtube": avisos}
 
 
-def privacidades(video_ids):
-    """{video_id: privacyStatus} de los videos indicados (1 unidad de cuota cada 50 videos); los borrados no figuran."""
+def estados(video_ids):
+    """{video_id: {privacidad, titulo}} de los videos indicados (1 unidad de cuota cada 50 videos); los borrados no
+    figuran. El título es el actual: pudo corregirse a mano en YouTube Studio."""
     yt = build("youtube", "v3", credentials=credenciales(), cache_discovery=False)
     resultado = {}
     for i in range(0, len(video_ids), 50):
-        respuesta = yt.videos().list(part="status", id=",".join(video_ids[i:i + 50])).execute()
-        resultado.update({v["id"]: v["status"]["privacyStatus"] for v in respuesta.get("items", [])})
+        respuesta = yt.videos().list(part="status,snippet", id=",".join(video_ids[i:i + 50])).execute()
+        resultado.update({v["id"]: {"privacidad": v["status"]["privacyStatus"], "titulo": v["snippet"]["title"]}
+                          for v in respuesta.get("items", [])})
     return resultado
 
 

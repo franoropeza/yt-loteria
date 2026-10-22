@@ -268,6 +268,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     except SinTablero:
         datos, avisos = datos_hibrido(segmentos, t_cab, fila_cronograma, cierre_png)
         t_datos = t_tab = None
+        cabeza_dudosa = False  # sale del extracto oficial
     else:
         capturar(vod, t_datos, datos_png := tmp / "datos.png", recorte=TABLERO)
         capturar(vod, t_tab, cierre_png)
@@ -277,6 +278,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
         lecturas = leer_cabeza(datos_png) + leer_cabeza(cierre_tab_png)
         ocr["cabeza"], confirmada = elegir_cabeza(lecturas, cantados_en_cabeza(segmentos, t_cab))
         datos, avisos = combinar_datos(ocr, fila_cronograma, datos_con_cartel)
+        cabeza_dudosa = not confirmada or not re.fullmatch(r"\d{4}", datos["cabeza"])
         if ocr["cabeza"] and not confirmada:
             avisos.append(f"La cabeza del tablero ({ocr['cabeza']}) no coincide con la que cantó el locutor "
                           f"(lecturas: {', '.join(lecturas)})")
@@ -284,6 +286,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
             avisos.append("Se vio el cartel de Tómbola Total pero el cronograma no lo indica")
     if aviso_cabeza:
         avisos.append(aviso_cabeza)
+        cabeza_dudosa = True
 
     b_ini = max(t_ini, t_cab - config.ANTES_CABEZA - config.BIENVENIDA_DUR)  # sin solapar con el tramo de la cabeza
     b_dur = min(config.BIENVENIDA_DUR, t_cab - config.ANTES_CABEZA - b_ini)
@@ -354,6 +357,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     info = {**datos, "compacto": str(destino), "miniatura": str(destino.with_suffix(".jpg")),
             "duracion": round(total, 1), "inicio_bienvenida": round(t_ini, 1), "momento_cabeza": round(t_cab, 1),
             "momento_datos": t_datos and round(t_datos, 1), "momento_tablero": t_tab and round(t_tab, 1), "avisos": avisos,
+            "cabeza_dudosa": cabeza_dudosa,  # el título puede llevar mal la cabeza: se corrige a mano en YouTube
             "capitulos": [[round(t), nombre] for t, nombre in capitulos]}
     Image.open(cierre_png).convert("RGB").save(info["miniatura"], quality=90)  # el tablero (o la placa) sirve de miniatura
     destino.with_suffix(".json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")

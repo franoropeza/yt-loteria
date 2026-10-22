@@ -14,7 +14,8 @@ En YouTube hay tres casos:
   - compacto híbrido: el tablero no apareció en la transmisión, el cierre es la placa con el extracto oficial;
   - respaldo: no hubo VOD o se abandonó, solo intro + placa con el extracto oficial (ver respaldo.py).
 A Facebook va solo el compacto normal, y solo si está listo dentro de FB_LIMITE_MIN desde la hora del sorteo.
-De los demás sorteos se comparte en Facebook el enlace de YouTube, y en el canal de Telegram el de todos, cuando el
+Si la cabeza no se pudo identificar bien, en vez del video se comparte el enlace de YouTube. De los demás sorteos
+se comparte en Facebook el enlace de YouTube, y en el canal de Telegram el de todos, cuando el
 video queda público (ver compartir.py).
 """
 import argparse
@@ -106,6 +107,8 @@ def publicar(info, subir):
             pass
         elif not a_tiempo_facebook(info):
             registro["facebook_omitido"] = f"Pasaron más de {config.FB_LIMITE_MIN} min del sorteo: no se sube a Facebook"
+        elif info.get("cabeza_dudosa"):  # el título se corrige a mano en YouTube: se comparte el enlace (compartir.py)
+            pass
         else:
             try:  # con avisos de contenido queda sin publicar para revisarlo
                 registro["facebook"] = facebook.subir(info["compacto"], info, fb_publicar, info["miniatura"])
