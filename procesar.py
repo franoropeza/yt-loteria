@@ -139,17 +139,23 @@ def extracto_publicado(fila):
         return False
 
 
-def sorteos_sin_vod(ahora, vods):
+def sorteos_sin_vod(ahora, vods, estado):
     """Sorteos del cronograma de hoy que ya deberían tener VOD y no lo tienen.
 
     Solo mira los sorteos cuya hora fue hace 70-95 min: así el aviso sale una sola vez, en la 3.ª revisión
-    (a los 80 min del sorteo), sin tener que guardar estado."""
+    (a los 80 min del sorteo), sin tener que guardar estado. Twitch a veces devuelve la lista de VODs vacía:
+    en ese caso no se avisa, y tampoco por un sorteo que ya figura procesado en el estado."""
+    if not vods:
+        return []
+    hechos = {(r.get("fecha"), r.get("sorteo")) for r in estado.values()}
     faltan = []
     for fila in cronograma.cargar() if cronograma.CSV.exists() else []:
         if fila["fecha"] != ahora.strftime("%d/%m/%Y"):
             continue
         hora = dt.datetime.strptime(f"{fila['fecha']} {fila['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
         if not 70 <= (ahora - hora).total_seconds() / 60 < 95:
+            continue
+        if (fila["fecha"], f"{fila['nombre']} {fila['sorteo']}") in hechos:
             continue
         tolerancia = dt.timedelta(minutes=config.TOLERANCIA_HORARIO_MIN)
         if not any(abs(v["inicio"] - hora) <= tolerancia for v in vods):
@@ -188,7 +194,7 @@ def main():
 
     vods = todos = [] if a.respaldo else twitch.ultimos_vods()
     if a.solo_detectar and not a.vod:
-        for fila in sorteos_sin_vod(ahora, vods):
+        for fila in sorteos_sin_vod(ahora, vods, estado):
             print(f"Sin VOD: {fila['nombre']} {fila['sorteo']} de las {fila['hora']}")
             telegram.avisar(f"📵 No se encontró en Twitch la transmisión del sorteo {fila['nombre'].title()} "
                             f"N° {fila['sorteo']} de hoy a las {fila['hora']} hs.\n"
