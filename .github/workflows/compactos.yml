@@ -78,8 +78,27 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      # En horas pico los espejos de Ubuntu llegaron a tardar 45 min en apt-get update + descarga: los .deb quedan
+      # en caché (por versión de imagen del runner, con restore-keys para reusar los de la imagen anterior) y se
+      # instalan sin red. Si no alcanzan (imagen nueva con otras dependencias), se bajan de nuevo y se re-cachean.
+      - id: imagen
+        run: echo "version=$ImageVersion" >> "$GITHUB_OUTPUT"
+      - name: Cache de paquetes de FFmpeg y Tesseract
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-debs
+          key: apt-ffmpeg-tesseract-v1-${{ steps.imagen.outputs.version }}
+          restore-keys: apt-ffmpeg-tesseract-v1-
       - name: Instalar FFmpeg y Tesseract
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg tesseract-ocr
+        run: |
+          if ls ~/apt-debs/*.deb > /dev/null 2>&1 && sudo apt-get install -y -qq --no-download ~/apt-debs/*.deb; then
+            exit 0
+          fi
+          rm -rf ~/apt-debs && mkdir -p ~/apt-debs/partial
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq -o Dir::Cache::archives="$HOME/apt-debs" ffmpeg tesseract-ocr
+          sudo rm -rf ~/apt-debs/partial ~/apt-debs/lock
+          sudo chown -R "$USER" ~/apt-debs
       - run: pip install -r requirements.txt
       - name: Cache del modelo de Whisper
         uses: actions/cache@v4
