@@ -60,6 +60,8 @@ def texto_compacto(registro):
     """Mensaje para un compacto subido (o armado sin subir)."""
     lineas = [f"🎬 {registro.get('titulo') or registro.get('sorteo', '') + ' ' + registro.get('fecha', '')}",
               f"A la cabeza: {registro.get('cabeza', '?')}"]
+    if registro.get("sin_audio"):
+        lineas.append("🔇 La transmisión salió sin audio: el compacto va solo con música")
     if vid := registro.get("video_id"):
         lineas += [f"Subido como {registro['privacidad']}"
                    + (" · +18 confirmado" if registro.get("mayores_18") else " · falta marcar +18"),

@@ -61,6 +61,13 @@ def leer_wav(ruta):
         return np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
 
 
+def nivel_db(wav):
+    """Nivel RMS de todo el audio en dBFS (-inf si es silencio digital: sin voz o sin pista)."""
+    x = leer_wav(wav)
+    rms = float(np.sqrt(np.mean(x ** 2))) if len(x) else 0.0
+    return 20 * np.log10(rms) if rms > 0 else float("-inf")
+
+
 def transcribir(wav, hasta_cabeza=True):
     """Devuelve la lista de segmentos [{start, end, text, words:[{w, s, e}]}]."""
     segs, _ = modelo().transcribe(leer_wav(wav), language="es", word_timestamps=True, vad_filter=True,

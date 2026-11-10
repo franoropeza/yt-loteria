@@ -66,6 +66,10 @@ ANTES_CABEZA, DESPUES_CABEZA = 50.0, 15.0
 CIERRE_DUR = 10.0  # mínimo 10 s: YouTube exige capítulos de al menos 10 s
 FUNDIDO = 0.5
 MUSICA_DB = -20
+# por debajo de este nivel (RMS de todo el VOD) se toma como transmisión sin audio: sin voz o sin pista.
+# Referencia: con locutor ~-34 dBFS; sin voz ~-69 dBFS.
+# Si hay ruido por encima del umbral pero Whisper no encuentra ninguna voz, también se toma como sin audio.
+NIVEL_SIN_AUDIO_DB = -55
 
 # Si el locutor dice alguno de estos términos en el tramo del compacto, el video queda privado para revisar.
 # Misma idea que TERMINOS_RIESGO de otro script (se comparan sin tildes y en minúscula).

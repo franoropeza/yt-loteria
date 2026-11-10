@@ -53,22 +53,29 @@ def pendiente(registro):
     return not registro or (registro["estado"] == "error" and registro["intentos"] < config.MAX_INTENTOS)
 
 
-def procesar_vod(vod, subir):
-    """Procesa un VOD. Devuelve el registro para estado/procesados.json."""
+def procesar_vod(vod, subir, cabeza=None):
+    """Procesa un VOD. Devuelve el registro para estado/procesados.json.
+    cabeza: momento (s) de "a la cabeza" indicado a mano (para VODs sin audio)."""
     fila = cronograma.por_horario(vod["inicio"], config.TOLERANCIA_HORARIO_MIN)
     if not fila and "SORTEO" not in vod["titulo"].upper():
         return {"estado": "omitido", "motivo": "No es un sorteo del cronograma"}
 
     from armar_compacto import armar  # imports pesados: solo en la etapa que procesa
-    from transcribir import transcribir
+    from transcribir import nivel_db, transcribir
 
     carpeta = config.TRABAJO / vod["id"]
     try:
         video = twitch.descargar(vod["id"], carpeta)
         wav = twitch.extraer_audio(video, carpeta / "audio.wav")
-        segmentos = transcribir(wav)
+        nivel = nivel_db(wav) if wav else float("-inf")
+        sin_voz = nivel < config.NIVEL_SIN_AUDIO_DB
+        segmentos = [] if sin_voz else transcribir(wav)
+        if not segmentos and not sin_voz:  # hay ruido pero Whisper no encontró ninguna voz
+            sin_voz = True
+        if sin_voz:
+            print(f"El VOD no tiene audio del locutor (nivel {nivel:.0f} dBFS): compacto solo con música", flush=True)
         (carpeta / "transcripcion.json").write_text(json.dumps(segmentos, ensure_ascii=False), encoding="utf-8")
-        info = armar(video, segmentos, config.SALIDA, fila)
+        info = armar(video, segmentos, config.SALIDA, fila, cabeza=cabeza, sin_voz=sin_voz)
         if not fila:
             info["avisos"].append("El horario del VOD no coincide con ningún sorteo del cronograma")
 
@@ -90,6 +97,8 @@ def publicar(info, subir):
     registro = {"estado": "armado", "sorteo": f"{info['sorteo_nombre']} {info['sorteo_numero']}",
                 "fecha": info["fecha"], "cabeza": info["cabeza"], "avisos": info["avisos"],
                 "compacto": os.path.basename(info["compacto"])}
+    if info.get("sin_audio"):
+        registro["sin_audio"] = True
     if subir:
         import youtube
         # con avisos se sube privado para revisarlo a mano, sin importar la configuración
@@ -178,13 +187,25 @@ def resumen(filas):
     return "\n".join(md) + "\n"
 
 
+def segundos(texto):
+    """'2:55', '1:02:55' o '175' -> segundos."""
+    t = 0.0
+    for parte in texto.strip().split(":"):
+        t = t * 60 + float(parte)
+    return t
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--vod", help="ID de un VOD puntual a procesar")
     ap.add_argument("--sin-subir", action="store_true")
     ap.add_argument("--solo-detectar", action="store_true", help="solo informa si hay VODs pendientes")
     ap.add_argument("--respaldo", metavar="'DD/MM/AAAA HH:MM'", help="arma el compacto de respaldo de un sorteo")
+    ap.add_argument("--cabeza", metavar="MM:SS", type=segundos,
+                    help="con --vod: momento del VOD en que sale la cabeza (para VODs sin audio)")
     a = ap.parse_args()
+    if a.cabeza is not None and not a.vod:
+        sys.exit("--cabeza va junto con --vod")
     if not config.TWITCH_CANAL:
         sys.exit("Falta configurar TWITCH_CANAL")
 
@@ -235,7 +256,7 @@ def main():
         previo = estado.get(vod["id"], {})
         print(f"Procesando VOD {vod['id']} ({vod['inicio']:%d/%m %H:%M}) {vod['titulo']}", flush=True)
         try:
-            registro = procesar_vod(vod, subir=not a.sin_subir)
+            registro = procesar_vod(vod, subir=not a.sin_subir, cabeza=a.cabeza)
         except Exception as e:  # CompactoError, red, YouTube, etc.: se reintenta en la próxima corrida
             if type(e).__name__ == "ExtractoPendiente":  # no es un error: se espera el extracto sin gastar intentos
                 print(f"{e}: se reintenta en la próxima corrida", flush=True)
@@ -248,8 +269,9 @@ def main():
             hubo_error = True
             traceback.print_exc()
             intentos = previo.get("intentos", 0) + 1
-            registro = {"estado": "error" if intentos < config.MAX_INTENTOS else "abandonado",
-                        "error": f"{type(e).__name__}: {e}"}
+            # sin audio el resultado no cambia al reintentar: se abandona ya y el sorteo pasa al respaldo
+            abandonar = intentos >= config.MAX_INTENTOS or type(e).__name__ == "SinAudio"
+            registro = {"estado": "abandonado" if abandonar else "error", "error": f"{type(e).__name__}: {e}"}
         registro.update(intentos=previo.get("intentos", 0) + 1, titulo_twitch=vod["titulo"],
                         actualizado=dt.datetime.now(config.ARG).isoformat(timespec="seconds"))
         if registro["estado"] in ("error", "abandonado"):

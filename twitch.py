@@ -55,8 +55,13 @@ def descargar(vod_id, carpeta):
 
 
 def extraer_audio(video, destino):
-    subprocess.run([config.FFMPEG, "-v", "error", "-y", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000",
-                    str(destino)], check=True)
+    """wav 16 kHz mono del VOD, o None si el VOD no tiene pista de audio."""
+    r = subprocess.run([config.FFMPEG, "-v", "error", "-y", "-i", str(video), "-map", "0:a:0?", "-vn", "-ac", "1",
+                        "-ar", "16000", str(destino)], capture_output=True, text=True)
+    if r.returncode and "does not contain any stream" in r.stderr:
+        return None
+    if r.returncode:
+        raise subprocess.CalledProcessError(r.returncode, r.args, r.stdout, r.stderr)
     return destino
 
 

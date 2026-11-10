@@ -6,6 +6,8 @@ Estructura del compacto:
 Si el tablero no aparece en la transmisión, se arma un compacto híbrido: el mismo video
 del locutor, pero el cierre es la placa con el extracto oficial de la API (ver respaldo.py).
 La cortina musical suena de fondo y baja sola cuando habla el locutor.
+Si la transmisión salió sin audio, el compacto va solo con la cortina y la cabeza se ubica por el
+tablero (ver cabeza_por_tablero), o con el momento que se indique a mano (procesar.py --vod ... --cabeza mm:ss).
 
 Uso local:
   python armar_compacto.py VOD.mp4 TRANSCRIPCION.json [--salida carpeta/]
@@ -52,6 +54,10 @@ class SinTablero(CompactoError):
 
 class ExtractoPendiente(CompactoError):
     """Falta el tablero y el extracto oficial todavía no está en la API: se reintenta sin gastar un intento."""
+
+
+class SinAudio(CompactoError):
+    """VOD sin audio y no se pudo ubicar la cabeza por el tablero: no tiene sentido reintentar (se pasa al respaldo)."""
 
 
 def buscar_momentos(segmentos):
@@ -106,16 +112,8 @@ def cantados_en_cabeza(segmentos, t_cab):
     return numeros_cantados(" ".join(s["text"] for s in segmentos if t_cab - 30 <= s["start"] <= t_cab + 20))
 
 
-def buscar_tablero(vod, desde):
-    """Ubica el tablero de resultados entre la cabeza y el final del VOD.
-
-    Devuelve (t_datos, t_final, tombola_total, datos_con_cartel):
-      t_datos: primer tablero sin cartel encima, para leer nombre/número del sorteo y la cabeza.
-      t_final: último tablero, para el cierre.
-    En Vespertina y Nocturna el tablero final lleva encima el cartel verde del Tómbola Total
-    (y el encabezado cambia a "TÓMBOLA TOTAL"), por eso los datos se leen antes. A veces el tablero
-    aparece directamente con el cartel: ahí se lee ese, la cabeza (celda 1) se ve
-    igual pero el encabezado trae el número del Tómbola Total."""
+def _cuadros_tablero(vod, desde):
+    """Un cuadro cada 2 s desde `desde`: (hay tablero, tiene el cartel de Tómbola Total, paso en s)."""
     w, h, paso = 192, 108, 2
     raw = subprocess.run([config.FFMPEG, "-v", "error", "-ss", str(desde), "-i", str(vod),
                           "-vf", f"fps=1/{paso},scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
@@ -126,6 +124,20 @@ def buscar_tablero(vod, desde):
     r, g, b = celdas[..., 0], celdas[..., 1], celdas[..., 2]
     tablero = ((r > 200) & (g > 200) & (b > 200)).mean(axis=(1, 2)) > 0.30
     cartel = ((g > 140) & (r < 140) & (b < 120)).mean(axis=(1, 2)) > 0.01
+    return tablero, cartel, paso
+
+
+def buscar_tablero(vod, desde):
+    """Ubica el tablero de resultados entre la cabeza y el final del VOD.
+
+    Devuelve (t_datos, t_final, tombola_total, datos_con_cartel):
+      t_datos: primer tablero sin cartel encima, para leer nombre/número del sorteo y la cabeza.
+      t_final: último tablero, para el cierre.
+    En Vespertina y Nocturna el tablero final lleva encima el cartel verde del Tómbola Total
+    (y el encabezado cambia a "TÓMBOLA TOTAL"), por eso los datos se leen antes. A veces el tablero
+    aparece directamente con el cartel: ahí se lee ese, la cabeza (celda 1) se ve
+    igual pero el encabezado trae el número del Tómbola Total."""
+    tablero, cartel, paso = _cuadros_tablero(vod, desde)
     limpios = np.where(tablero & ~cartel)[0]
     todos = np.where(tablero)[0]
     if not len(todos):
@@ -134,6 +146,48 @@ def buscar_tablero(vod, desde):
     # +1 cuadro: da tiempo a que termine la animación de entrada del tablero
     t_datos = desde + min(elegidos[0] + 1, elegidos[-1]) * paso
     return t_datos, desde + todos[-1] * paso, bool(cartel[todos[-1]]), not len(limpios)
+
+
+# Esquina de la zona del número de cada casilla (1 a 20, por columnas de a 5) dentro del tablero recortado;
+# cada una mide 196x80, como CAMPOS_OCR["cabeza"], que es la casilla 1
+CASILLAS = [(176 + 283 * (i // 5), 190 + 96 * (i % 5)) for i in range(20)]
+DEMORA_TABLERO = 4  # s entre "a la cabeza" y la aparición del tablero, cuando el operador lo muestra enseguida
+REARMAR = "Para armarlo con el video, correr el workflow con este VOD y el minuto en que sale la cabeza (cabeza = mm:ss)"
+
+
+def casillas_llenas(png):
+    """Lista de 20 booleanos: qué casillas del tablero recortado ya tienen número."""
+    rgb = np.asarray(Image.open(png).convert("RGB")).astype(int)
+    return [bool((rgb[y + 10:y + 70, x + 10:x + 186].min(axis=2) < 120).mean() > 0.05) for x, y in CASILLAS]
+
+
+def mmss(t):
+    return f"{int(t) // 60}:{int(t) % 60:02d}"
+
+
+def cabeza_por_tablero(vod):
+    """Momento de la cabeza en un VOD sin audio, deducido de las apariciones del tablero.
+
+    El operador muestra el tablero cada tantas extracciones. Si la primera vez que aparece la casilla 1 llena es la
+    única novedad respecto de la aparición anterior, la cabeza fue la última extracción: salió unos segundos antes.
+    Si aparecieron varios números juntos no se sabe cuál de esas extracciones fue la cabeza, y no se adivina."""
+    tablero, _, paso = _cuadros_tablero(vod, 0)
+    idx = np.where(tablero)[0]
+    tramos = np.split(idx, np.where(np.diff(idx) > 1)[0] + 1) if len(idx) else []
+    previas = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        png = Path(tmp) / "tablero.png"
+        for tramo in tramos:
+            ini, fin = tramo[0] * paso, tramo[-1] * paso
+            capturar(vod, min(ini + paso, fin), png, recorte=TABLERO)  # +paso: que termine la animación de entrada
+            llenas = casillas_llenas(png)
+            if llenas[0]:
+                if sum(llenas) - previas == 1:
+                    return max(0.0, ini - DEMORA_TABLERO)
+                raise SinAudio(f"El VOD no tiene audio y no se pudo ubicar la cabeza: el tablero apareció a los "
+                               f"{mmss(ini)} con {sum(llenas) - previas} números nuevos. {REARMAR}")
+            previas = sum(llenas)
+    raise SinAudio(f"El VOD no tiene audio y el tablero nunca mostró la cabeza. {REARMAR}")
 
 
 def capturar(vod, t, destino, recorte=None):
@@ -179,10 +233,13 @@ def leer_cabeza(tablero):
     return lecturas
 
 
-def elegir_cabeza(lecturas, cantados):
+def elegir_cabeza(lecturas, cantados, sin_voz=False):
     """La lectura más votada entre las que cantó el locutor; si no cantó ninguna, la más votada.
-    Devuelve (cabeza, confirmada por el locutor)."""
+    Sin audio no hay locutor que la confirme: vale si coinciden todas las lecturas (al menos 4).
+    Devuelve (cabeza, confirmada)."""
     votos = Counter(lecturas).most_common()
+    if sin_voz:
+        return (votos[0][0] if votos else ""), len(votos) == 1 and len(lecturas) >= 4
     for cabeza, _ in votos:
         if any(cabeza.lstrip("0") in n for n in cantados):
             return cabeza, True
@@ -257,10 +314,19 @@ def filtro_intro(datos):
     return intro + f",trim=duration={config.INTRO_DUR},setpts=PTS-STARTPTS,format=yuv420p[v0]"
 
 
-def armar(vod, segmentos, salida, fila_cronograma=None):
-    """Arma el compacto. Devuelve un dict con los datos del sorteo, la ruta del video y los avisos."""
+def armar(vod, segmentos, salida, fila_cronograma=None, cabeza=None, sin_voz=False):
+    """Arma el compacto. Devuelve un dict con los datos del sorteo, la ruta del video y los avisos.
+
+    cabeza: momento (s) de "a la cabeza" indicado a mano, en vez de buscarlo en la transcripción.
+    sin_voz: la transmisión salió sin audio; el compacto va solo con la cortina."""
     salida.mkdir(parents=True, exist_ok=True)
-    t_ini, t_cab, aviso_cabeza = buscar_momentos(segmentos)
+    if cabeza is not None or sin_voz:
+        t_cab = float(cabeza) if cabeza is not None else cabeza_por_tablero(vod)
+        aviso_cabeza = None
+        bienvenida = next((s["start"] for s in segmentos if "bienvenid" in s["text"].lower()), None)
+        t_ini = min(bienvenida, t_cab) if bienvenida is not None else max(0.0, t_cab - config.ANTES_CABEZA)
+    else:
+        t_ini, t_cab, aviso_cabeza = buscar_momentos(segmentos)
     tmp = Path(tempfile.mkdtemp())
     cierre_png = tmp / "cierre.png"
     try:
@@ -276,10 +342,12 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
         ocr = leer_tablero(datos_png)
         # la cabeza va en el título: se vota entre varias lecturas de los dos tableros y manda la que cantó el locutor
         lecturas = leer_cabeza(datos_png) + leer_cabeza(cierre_tab_png)
-        ocr["cabeza"], confirmada = elegir_cabeza(lecturas, cantados_en_cabeza(segmentos, t_cab))
+        ocr["cabeza"], confirmada = elegir_cabeza(lecturas, cantados_en_cabeza(segmentos, t_cab), sin_voz)
         datos, avisos = combinar_datos(ocr, fila_cronograma, datos_con_cartel)
         cabeza_dudosa = not confirmada or not re.fullmatch(r"\d{4}", datos["cabeza"])
-        if ocr["cabeza"] and not confirmada:
+        if ocr["cabeza"] and not confirmada and sin_voz:
+            avisos.append(f"Sin audio: las lecturas de la cabeza en el tablero no coinciden ({', '.join(lecturas)})")
+        elif ocr["cabeza"] and not confirmada:
             avisos.append(f"La cabeza del tablero ({ocr['cabeza']}) no coincide con la que cantó el locutor "
                           f"(lecturas: {', '.join(lecturas)})")
         if cartel_tt and not datos["tombola_total"]:
@@ -324,7 +392,10 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     k, entrada = 1, 2
     for _ in range(2 if con_bienvenida else 1):  # tramos del VOD
         f.append(f"[{entrada}:v]{norm}[v{k}]")
-        f.append(f"[{entrada}:a]aresample=48000,aformat=channel_layouts=stereo[a{k}]")
+        if sin_voz:  # sin locutor: silencio (si quedó ruido de fondo en la transmisión, no se escucha)
+            f.append(f"anullsrc=r=48000:cl=stereo,atrim=0:{piezas[k]:.2f}[a{k}]")
+        else:
+            f.append(f"[{entrada}:a]aresample=48000,aformat=channel_layouts=stereo[a{k}]")
         k, entrada = k + 1, entrada + 1
     f.append(f"[{entrada}:v]scale=1920:1080,setsar=1,fps=30,trim=duration={config.CIERRE_DUR},format=yuv420p[v{k}]")  # cierre: tablero o placa
     f.append(f"anullsrc=r=48000:cl=stereo,atrim=0:{config.CIERRE_DUR}[a{k}]")
@@ -357,7 +428,7 @@ def armar(vod, segmentos, salida, fila_cronograma=None):
     info = {**datos, "compacto": str(destino), "miniatura": str(destino.with_suffix(".jpg")),
             "duracion": round(total, 1), "inicio_bienvenida": round(t_ini, 1), "momento_cabeza": round(t_cab, 1),
             "momento_datos": t_datos and round(t_datos, 1), "momento_tablero": t_tab and round(t_tab, 1), "avisos": avisos,
-            "cabeza_dudosa": cabeza_dudosa,  # el título puede llevar mal la cabeza: se corrige a mano en YouTube
+            "cabeza_dudosa": cabeza_dudosa, "sin_audio": sin_voz,  # el título puede llevar mal la cabeza: se corrige a mano en YouTube
             "capitulos": [[round(t), nombre] for t, nombre in capitulos]}
     Image.open(cierre_png).convert("RGB").save(info["miniatura"], quality=90)  # el tablero (o la placa) sirve de miniatura
     destino.with_suffix(".json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")

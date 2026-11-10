@@ -11,6 +11,9 @@ on:
       vod:
         description: "ID de un VOD puntual (vacío = buscar nuevos)"
         required: false
+      cabeza:
+        description: "Con VOD: minuto del VOD en que sale la cabeza, MM:SS (para VODs sin audio)"
+        required: false
       respaldo:
         description: "Compacto de respaldo con el extracto oficial de un sorteo: DD/MM/AAAA HH:MM"
         required: false
@@ -123,11 +126,13 @@ jobs:
           TELEGRAM_CANAL_TOKEN: ${{ secrets.TELEGRAM_CANAL_TOKEN }}
           TELEGRAM_CANAL_CHAT_ID: ${{ secrets.TELEGRAM_CANAL_CHAT_ID || vars.TELEGRAM_CANAL_CHAT_ID }}
           VOD: ${{ inputs.vod }}
+          CABEZA: ${{ inputs.cabeza }}
           RESPALDO: ${{ inputs.respaldo }}
           SIN_SUBIR: ${{ inputs.sin_subir }}
         run: |
           ARGS=()
           [ -n "$VOD" ] && ARGS+=(--vod "$VOD")
+          [ -n "$CABEZA" ] && ARGS+=(--cabeza "$CABEZA")
           [ -n "$RESPALDO" ] && ARGS+=(--respaldo "$RESPALDO")
           [ "$SIN_SUBIR" = "true" ] && ARGS+=(--sin-subir)
           python procesar.py "${ARGS[@]}" || { c=$?; echo "codigo=$c" >> "$GITHUB_OUTPUT"; exit $c; }

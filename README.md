@@ -54,6 +54,20 @@ con el extracto oficial de la API, la misma del respaldo. Los datos salen del cr
 controlada con la que cantó el locutor. Se sube **privado** con aviso y es solo para YouTube. Si el extracto
 todavía no está publicado, el VOD espera a la próxima corrida sin gastar un intento.
 
+### Transmisión sin audio
+
+Si el VOD no tiene audio (nivel por debajo de `NIVEL_SIN_AUDIO_DB`, sin pista de audio, o Whisper no encuentra
+ninguna voz), el compacto se arma igual pero **solo con la cortina musical**, y la cabeza se lee en el tablero
+(vale si coinciden todas las lecturas del OCR, porque no hay locutor que la confirme). El Telegram lo indica con 🔇.
+
+Sin "a la cabeza" que escuchar, el momento del corte se deduce del tablero: si la primera vez que aparece con la
+casilla 1 llena es el único número nuevo respecto de la aparición anterior, la cabeza salió unos segundos antes.
+Si no se puede deducir, no se adivina: el VOD se abandona sin reintentos
+(el resultado no cambiaría) y el sorteo pasa al compacto de respaldo. Para armarlo con el video, correr
+Actions → "Compactos de sorteos" → Run workflow con el VOD y el minuto en que sale la cabeza en el VOD
+(`cabeza`, ej. `2:55`); local: `python procesar.py --vod 2925069480 --cabeza 2:55`. Si el respaldo ya se
+había subido, borrarlo de YouTube a mano.
+
 ### Compacto de respaldo
 
 Si un sorteo del cronograma se queda sin compacto (no hubo VOD en Twitch o el VOD se abandonó después de
