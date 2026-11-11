@@ -65,7 +65,7 @@ def nivel_db(wav):
     """Nivel RMS de todo el audio en dBFS (-inf si es silencio digital: sin voz o sin pista)."""
     x = leer_wav(wav)
     rms = float(np.sqrt(np.mean(x ** 2))) if len(x) else 0.0
-    return 20 * np.log10(rms) if rms > 0 else float("-inf")
+    return float(20 * np.log10(rms)) if rms > 0 else float("-inf")
 
 
 def transcribir(wav, hasta_cabeza=True):

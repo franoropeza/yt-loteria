@@ -68,7 +68,7 @@ def procesar_vod(vod, subir, cabeza=None):
         video = twitch.descargar(vod["id"], carpeta)
         wav = twitch.extraer_audio(video, carpeta / "audio.wav")
         nivel = nivel_db(wav) if wav else float("-inf")
-        sin_voz = nivel < config.NIVEL_SIN_AUDIO_DB
+        sin_voz = bool(nivel < config.NIVEL_SIN_AUDIO_DB)
         segmentos = [] if sin_voz else transcribir(wav)
         if not segmentos and not sin_voz:  # hay ruido pero Whisper no encontró ninguna voz
             sin_voz = True
