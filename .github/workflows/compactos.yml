@@ -92,8 +92,28 @@ jobs:
           path: ~/apt-debs
           key: apt-ffmpeg-tesseract-v1-${{ steps.imagen.outputs.version }}
           restore-keys: apt-ffmpeg-tesseract-v1-
+      # Un apt colgado (espejo lento, lock de dpkg) llegó a trabar la corrida 40+ min y, por la concurrencia,
+      # a cancelar todas las corridas de la cola (11/11/2026, Matutina). Se corta a los 10 min y se reintenta
+      # una vez desde cero; si el reintento también falla, la corrida falla y avisa por Telegram.
       - name: Instalar FFmpeg y Tesseract
+        id: instalar
+        timeout-minutes: 10
+        continue-on-error: true
         run: |
+          if ls ~/apt-debs/*.deb > /dev/null 2>&1 && sudo apt-get install -y -qq --no-download ~/apt-debs/*.deb; then
+            exit 0
+          fi
+          rm -rf ~/apt-debs && mkdir -p ~/apt-debs/partial
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq -o Dir::Cache::archives="$HOME/apt-debs" ffmpeg tesseract-ocr
+          sudo rm -rf ~/apt-debs/partial ~/apt-debs/lock
+          sudo chown -R "$USER" ~/apt-debs
+      - name: Instalar FFmpeg y Tesseract (reintento)
+        if: steps.instalar.outcome == 'failure'
+        timeout-minutes: 10
+        run: |
+          sudo killall -q apt-get dpkg || true
+          sudo dpkg --configure -a || true
           if ls ~/apt-debs/*.deb > /dev/null 2>&1 && sudo apt-get install -y -qq --no-download ~/apt-debs/*.deb; then
             exit 0
           fi
