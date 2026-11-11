@@ -213,7 +213,12 @@ def main():
     avisos_generales = [] if a.solo_detectar else cronograma.asegurar(ahora.date())
     estado = cargar_estado()
 
-    vods = todos = [] if a.respaldo else twitch.ultimos_vods()
+    try:
+        vods = todos = [] if a.respaldo else twitch.ultimos_vods()
+    except RuntimeError:
+        if not a.vod:  # sin la lista no se sabe qué sorteos tienen VOD: armaría respaldos de más
+            raise
+        vods = todos = []  # con --vod se busca el VOD directo
     if a.solo_detectar and not a.vod:
         for fila in sorteos_sin_vod(ahora, vods, estado):
             print(f"Sin VOD: {fila['nombre']} {fila['sorteo']} de las {fila['hora']}")

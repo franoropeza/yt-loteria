@@ -2,6 +2,7 @@
 import datetime as dt
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import yt_dlp
@@ -32,9 +33,15 @@ def en_vivo(canal=None):
 def ultimos_vods(canal=None, cantidad=config.VODS_A_REVISAR):
     """Devuelve [{id, titulo, inicio (datetime ARG), duracion}] de los últimos VODs, del más nuevo al más viejo."""
     url = f"https://www.twitch.tv/{canal or config.TWITCH_CANAL}/videos?filter=archives&sort=time"
-    with _ydl(extract_flat=True, playlistend=cantidad) as y:
-        lista = y.extract_info(url, download=False).get("entries") or []
-    return [info_vod(str(e["id"]).lstrip("v")) for e in lista]
+    # Twitch a veces devuelve la lista vacía sin error (11/11/2026: armó el respaldo de un sorteo con VOD).
+    # El canal siempre tiene VODs: se reintenta y, si sigue vacía, se corta en vez de seguir como si no hubiera.
+    for intento in range(3):
+        with _ydl(extract_flat=True, playlistend=cantidad) as y:
+            lista = y.extract_info(url, download=False).get("entries") or []
+        if lista:
+            return [info_vod(str(e["id"]).lstrip("v")) for e in lista]
+        time.sleep(10)
+    raise RuntimeError("Twitch devolvió la lista de VODs vacía 3 veces: no se procesa nada en esta corrida")
 
 
 def info_vod(vod_id):
