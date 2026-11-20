@@ -19,7 +19,6 @@ from pathlib import Path
 import config
 import cronograma
 
-API = "LOTERIA_API_EXTRACTO"  # fecha DD-MM-AAAA
 TURNOS = {"12:00": "MATUTINO", "15:00": "VESPERTINO", "18:00": "EXTRA", "21:00": "NOCTURNO", "22:30": "NOCTURNOEXTRA"}
 ESPERA_MIN = 70        # desde la hora del sorteo: antes de esto el compacto normal todavía puede salir
 VENTANA_HORAS = 24     # sorteos más viejos no se respaldan (evita subir el historial)
@@ -37,7 +36,9 @@ def extracto(fila):
     """Los 20 números del sorteo según la API oficial, o None si todavía no está publicado."""
     fecha = fila["fecha"].replace("/", "-")
     if fecha not in _cache:
-        pedido = urllib.request.Request(API.format(fecha=fecha), headers={"User-Agent": "compactos"})
+        if not config.API_EXTRACTO:
+            raise RuntimeError("Falta LOTERIA_API_EXTRACTO (secreto con la URL de la API del extracto)")
+        pedido = urllib.request.Request(config.API_EXTRACTO.format(fecha=fecha), headers={"User-Agent": "compactos"})
         with urllib.request.urlopen(pedido, timeout=20) as r:
             _cache[fecha] = json.load(r)
     turno = (_cache[fecha].get("resultados") or {}).get(TURNOS.get(fila["hora"], ""), {})

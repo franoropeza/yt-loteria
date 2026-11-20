@@ -72,8 +72,12 @@ MUSICA_DB = -20
 NIVEL_SIN_AUDIO_DB = -55
 
 # Si el locutor dice alguno de estos términos en el tramo del compacto, el video queda privado para revisar.
-# Misma idea que TERMINOS_RIESGO de otro script (se comparan sin tildes y en minúscula).
-TERMINOS_RIESGO = []  # ver secreto TERMINOS_RIESGO
+# Separados por coma, sin tildes y en minúscula (secreto TERMINOS_RIESGO). Sin definir, todos los compactos
+# quedan privados con aviso (ver armar_compacto.revisar_locucion).
+TERMINOS_RIESGO = [t.strip() for t in os.environ.get("TERMINOS_RIESGO", "").lower().split(",") if t.strip()]
+
+# API del extracto oficial, con {fecha} en formato DD-MM-AAAA (secreto LOTERIA_API_EXTRACTO). Ver respaldo.py.
+API_EXTRACTO = os.environ.get("LOTERIA_API_EXTRACTO", "")
 
 WHISPER_MODELO = os.environ.get("WHISPER_MODELO", "small")
 

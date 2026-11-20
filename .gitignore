@@ -8,3 +8,5 @@ transcripciones/
 token.json
 client_secret*.json
 .env*
+# repo privado aparte (<repo>-estado), clonado acá
+estado/

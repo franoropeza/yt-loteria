@@ -18,7 +18,7 @@ baja sola cuando habla el locutor.
      varias veces (primer tablero y tablero final, tres preprocesados) y se vota; si el locutor cantó una de las
      lecturas, manda esa.
    - Arma el video con FFmpeg y lo sube a YouTube con título, descripción y miniatura (el tablero).
-   - Guarda el resultado en `estado/procesados.json` (se commitea al repo).
+   - Guarda el resultado en `estado/procesados.json`, que vive en el repo **privado** `<repo>-estado` (ver Puesta en marcha).
 
 ### Controles
 
@@ -27,7 +27,7 @@ El video **se sube como privado** (aunque `YT_PRIVACIDAD` diga otra cosa) y la c
 
 - la cabeza no se pudo confirmar con "ubicación uno" en los 30 s previos;
 - la cabeza leída en el tablero no coincide con la que cantó el locutor;
-- el locutor dice términos de riesgo en el tramo del compacto (ver secreto TERMINOS_RIESGO);
+- el locutor dice términos de riesgo en el tramo del compacto (secreto `TERMINOS_RIESGO`; sin definir, todos quedan privados);
 - el sorteo no está en el cronograma o el tablero no coincide con el cronograma;
 - YouTube no confirma la restricción de edad (ver abajo).
 
@@ -72,7 +72,7 @@ había subido, borrarlo de YouTube a mano.
 
 Si un sorteo del cronograma se queda sin compacto (no hubo VOD en Twitch o el VOD se abandonó después de
 3 intentos), desde los 70 min del sorteo se arma un video de ~24 s con el extracto oficial de la API de la
-Lotería (`LOTERIA_API_EXTRACTO`): la misma intro y una placa con la cabeza y
+Lotería (secreto `LOTERIA_API_EXTRACTO`): la misma intro y una placa con la cabeza y
 los 20 números, con la cortina de fondo. Si el extracto todavía no está publicado, se vuelve a mirar en la
 próxima corrida (hasta 24 h después del sorteo). Siempre se sube **privado** para revisarlo; la descripción
 incluye los 20 números. Es solo para YouTube: no se sube a Facebook (ahí el extracto se publica aparte, como
@@ -90,7 +90,17 @@ no se espera VOD, no se avisa "sin VOD" y no se arma respaldo. Los nombres salen
 ## Puesta en marcha
 
 ### 1. Repositorio
-Repositorio **privado** en una cuenta u organización de la Lotería (no personal).
+Repositorio en una cuenta u organización de la Lotería (no personal). El código puede ser público: lo sensible va en
+secretos y el estado (`estado/`) en un repo **privado** aparte con el mismo nombre + `-estado`:
+
+```
+gh repo create <org>/<repo>-estado --private
+ssh-keygen -t ed25519 -N "" -f estado_key
+gh repo deploy-key add estado_key.pub -R <org>/<repo>-estado --allow-write
+gh secret set ESTADO_DEPLOY_KEY -R <org>/<repo> < estado_key     # después borrar estado_key y estado_key.pub
+```
+
+Para trabajar en local, clonarlo dentro de la carpeta del proyecto: `git clone <url del repo -estado> estado`.
 
 ### 2. Variables y secretos (Settings → Secrets and variables → Actions)
 
@@ -111,6 +121,9 @@ Repositorio **privado** en una cuenta u organización de la Lotería (no persona
 | Secreto | `TELEGRAM_CHAT_ID` | opcional: chat donde llegan los avisos |
 | Variable o secreto | `TELEGRAM_CANAL_CHAT_ID` | opcional: canal público donde se comparte el enlace de YouTube (`@usuario` o `-100...`) |
 | Secreto | `TELEGRAM_CANAL_TOKEN` | opcional: token del bot que publica en el canal (vacío = el bot de los avisos) |
+| Secreto | `ESTADO_DEPLOY_KEY` | clave privada SSH con escritura en el repo `<repo>-estado` (ver arriba) |
+| Secreto | `TERMINOS_RIESGO` | términos que dejan el compacto privado, separados por coma, sin tildes y en minúscula |
+| Secreto | `LOTERIA_API_EXTRACTO` | URL de la API del extracto oficial, con `{fecha}` (DD-MM-AAAA) |
 
 **Avisos por Telegram (opcional):** con estos dos secretos llega un mensaje por cada compacto subido (miniatura,
 cabeza, avisos y link para revisarlo y publicarlo en YouTube Studio) y por cada falla. Con Telegram configurado,
@@ -178,6 +191,7 @@ El compacto queda descargable 7 días en los artefactos de la corrida.
 ```
 python -m venv .venv && .venv/Scripts/pip install -r requirements.txt   # requiere ffmpeg y tesseract
 set TWITCH_CANAL=loteriadesalta
+set TERMINOS_RIESGO=...                     # y LOTERIA_API_EXTRACTO para el respaldo
 python procesar.py --solo-detectar          # qué VODs están pendientes
 python procesar.py --vod 2898838397 --sin-subir
 python armar_compacto.py VOD.mp4 transcripcion.json   # rearmar con una transcripción ya hecha

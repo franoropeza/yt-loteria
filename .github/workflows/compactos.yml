@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # para guardar estado/procesados.json y cronograma.csv en el repo
+  contents: write   # para guardar cronograma.csv en el repo (el estado va al repo privado <repo>-estado)
 
 env:
   TWITCH_CANAL: ${{ vars.TWITCH_CANAL }}
@@ -45,6 +45,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      # estado/procesados.json vive en un repo privado aparte (este repo es público). Deploy key con escritura.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}-estado
+          ssh-key: ${{ secrets.ESTADO_DEPLOY_KEY }}
+          path: estado
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -77,6 +83,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      # estado/procesados.json vive en un repo privado aparte (este repo es público). Deploy key con escritura.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}-estado
+          ssh-key: ${{ secrets.ESTADO_DEPLOY_KEY }}
+          path: estado
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -149,6 +161,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_CANAL_TOKEN: ${{ secrets.TELEGRAM_CANAL_TOKEN }}
           TELEGRAM_CANAL_CHAT_ID: ${{ secrets.TELEGRAM_CANAL_CHAT_ID || vars.TELEGRAM_CANAL_CHAT_ID }}
+          TERMINOS_RIESGO: ${{ secrets.TERMINOS_RIESGO }}
+          LOTERIA_API_EXTRACTO: ${{ secrets.LOTERIA_API_EXTRACTO }}
           VOD: ${{ inputs.vod }}
           CABEZA: ${{ inputs.cabeza }}
           RESPALDO: ${{ inputs.respaldo }}
@@ -160,13 +174,14 @@ jobs:
           [ -n "$RESPALDO" ] && ARGS+=(--respaldo "$RESPALDO")
           [ "$SIN_SUBIR" = "true" ] && ARGS+=(--sin-subir)
           python procesar.py "${ARGS[@]}" || { c=$?; echo "codigo=$c" >> "$GITHUB_OUTPUT"; exit $c; }
-      - name: Guardar estado en el repo
+      - name: Guardar estado
         if: always()
         run: |
           git config user.name "compactos-bot"
           git config user.email "compactos-bot@users.noreply.github.com"
-          git add estado/ cronograma.csv
-          git diff --cached --quiet || (git commit -m "Estado de compactos $(date -u +%F' '%H:%M)" && { git push || { git pull --rebase && git push; }; })
+          git add cronograma.csv
+          git diff --cached --quiet || (git commit -m "Cronograma $(date -u +%F' '%H:%M)" && { git push || { git pull --rebase && git push; }; })
+          (cd estado && git add -A && { git diff --cached --quiet || { git -c user.name=compactos-bot -c user.email=compactos-bot@users.noreply.github.com commit -qm "Estado de compactos $(date -u +%F' '%H:%M)" && { git push || { git pull --rebase && git push; }; }; }; })
       - name: Guardar compactos armados (7 días)
         if: always()
         uses: actions/upload-artifact@v4
@@ -197,6 +212,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      # estado/procesados.json vive en un repo privado aparte (este repo es público). Deploy key con escritura.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}-estado
+          ssh-key: ${{ secrets.ESTADO_DEPLOY_KEY }}
+          path: estado
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -214,9 +235,6 @@ jobs:
           TELEGRAM_CANAL_TOKEN: ${{ secrets.TELEGRAM_CANAL_TOKEN }}
           TELEGRAM_CANAL_CHAT_ID: ${{ secrets.TELEGRAM_CANAL_CHAT_ID || vars.TELEGRAM_CANAL_CHAT_ID }}
         run: python compartir.py
-      - name: Guardar estado en el repo
+      - name: Guardar estado
         run: |
-          git config user.name "compactos-bot"
-          git config user.email "compactos-bot@users.noreply.github.com"
-          git add estado/
-          git diff --cached --quiet || (git commit -m "Enlaces compartidos $(date -u +%F' '%H:%M)" && { git push || { git pull --rebase && git push; }; })
+          (cd estado && git add -A && { git diff --cached --quiet || { git -c user.name=compactos-bot -c user.email=compactos-bot@users.noreply.github.com commit -qm "Enlaces compartidos $(date -u +%F' '%H:%M)" && { git push || { git pull --rebase && git push; }; }; }; })

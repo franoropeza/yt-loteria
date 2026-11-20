@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       video_id:
-        description: "ID del video de Facebook (está en estado/procesados.json); vacío = probar la subida por Reels con un clip en borrador"
+        description: "ID del video de Facebook (está en el estado de compactos); vacío = probar la subida por Reels con un clip en borrador"
         required: false
 
 permissions:

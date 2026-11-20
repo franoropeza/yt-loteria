@@ -101,6 +101,8 @@ def numeros_cantados(texto):
 def revisar_locucion(segmentos, desde, hasta):
     """Controles sobre lo que dice el locutor. Devuelve una lista de avisos."""
     avisos = []
+    if not config.TERMINOS_RIESGO:
+        avisos.append("TERMINOS_RIESGO no está configurado: no se controlaron los términos de riesgo, revisar el audio")
     tramo = " ".join(s["text"] for s in segmentos if desde - 2 <= s["start"] <= hasta)
     if riesgo := sorted({t for t in config.TERMINOS_RIESGO if t in sin_tildes(tramo)}):
         avisos.append(f"El locutor menciona términos de riesgo en el compacto: {', '.join(riesgo)}")
