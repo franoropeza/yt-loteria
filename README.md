@@ -22,14 +22,10 @@ baja sola cuando habla el locutor.
 
 ### Controles
 
-El video **se sube como privado** (aunque `YT_PRIVACIDAD` diga otra cosa) y la corrida queda en rojo
-(GitHub manda un mail; el detalle queda en el resumen de la corrida) si:
-
-- la cabeza no se pudo confirmar con "ubicación uno" en los 30 s previos;
-- la cabeza leída en el tablero no coincide con la que cantó el locutor;
-- el locutor dice términos de riesgo en el tramo del compacto (secreto `TERMINOS_RIESGO`; sin definir, todos quedan privados);
-- el sorteo no está en el cronograma o el tablero no coincide con el cronograma;
-- YouTube no confirma la restricción de edad (ver abajo).
+El video **se sube como privado** para revisión manual (aunque `YT_PRIVACIDAD` diga otra cosa) si alguno de los
+controles automáticos no pasa: la cabeza no se pudo confirmar por más de una fuente, el sorteo no coincide con el
+cronograma, el audio no pasa el control de contenido (secreto `TERMINOS_RIESGO`) o YouTube no confirma la
+restricción de edad (ver abajo). El detalle llega como aviso por Telegram.
 
 ### Mayores de 18
 
@@ -47,26 +43,12 @@ Vista previa: `python youtube.py salida/compacto_....json`.
 Si falla (no se encontró "a la cabeza", error de red, etc.) se reintenta en las próximas corridas,
 hasta 3 veces.
 
-### Compacto híbrido (sin tablero)
+### Variantes
 
-Si el locutor canta "a la cabeza" pero el tablero de resultados nunca aparece en la transmisión, se arma el compacto con el video del locutor como siempre y el cierre (y la miniatura) es la placa
-con el extracto oficial de la API, la misma del respaldo. Los datos salen del cronograma y la cabeza del extracto,
-controlada con la que cantó el locutor. Se sube **privado** con aviso y es solo para YouTube. Si el extracto
-todavía no está publicado, el VOD espera a la próxima corrida sin gastar un intento.
-
-### Transmisión sin audio
-
-Si el VOD no tiene audio (nivel por debajo de `NIVEL_SIN_AUDIO_DB`, sin pista de audio, o Whisper no encuentra
-ninguna voz), el compacto se arma igual pero **solo con la cortina musical**, y la cabeza se lee en el tablero
-(vale si coinciden todas las lecturas del OCR, porque no hay locutor que la confirme). El Telegram lo indica con 🔇.
-
-Sin "a la cabeza" que escuchar, el momento del corte se deduce del tablero: si la primera vez que aparece con la
-casilla 1 llena es el único número nuevo respecto de la aparición anterior, la cabeza salió unos segundos antes.
-Si no se puede deducir, no se adivina: el VOD se abandona sin reintentos
-(el resultado no cambiaría) y el sorteo pasa al compacto de respaldo. Para armarlo con el video, correr
-Actions → "Compactos de sorteos" → Run workflow con el VOD y el minuto en que sale la cabeza en el VOD
-(`cabeza`, ej. `2:55`); local: `python procesar.py --vod 2925069480 --cabeza 2:55`. Si el respaldo ya se
-había subido, borrarlo de YouTube a mano.
+Si al VOD le falta algún elemento (tablero de resultados o audio), el compacto se arma con lo que haya y el
+resultado se toma del extracto oficial o del tablero, siempre **privado** para revisión. Si no se puede ubicar el
+momento de la cabeza automáticamente, se puede indicar a mano: Run workflow con el VOD y el minuto en que sale la
+cabeza (`cabeza`, ej. `2:55`); local: `python procesar.py --vod <ID> --cabeza 2:55`.
 
 ### Compacto de respaldo
 
