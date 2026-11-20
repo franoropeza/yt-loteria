@@ -66,9 +66,14 @@ def _compartir(destino, p, titulo):
 
 def _limite_telegram(r):
     """Hasta cuándo se comparte en el canal de Telegram. Los pendientes anteriores a este límite no lo tienen
-    guardado: se cuenta desde la subida (unos 25 min después del sorteo)."""
+    guardado: se cuenta desde la hora del sorteo en el cronograma o, si no figura, desde la subida."""
     if limite := r["compartir_pendiente"].get("limite_telegram"):
         return dt.datetime.fromisoformat(limite)
+    import cronograma
+    numero = (r.get("sorteo") or "").split()[-1:]
+    if numero and (fila := cronograma.buscar(sorteo=numero[0])):
+        hora = dt.datetime.strptime(f"{fila['fecha']} {fila['hora']}", "%d/%m/%Y %H:%M").replace(tzinfo=config.ARG)
+        return hora + dt.timedelta(minutes=config.TELEGRAM_LIMITE_MIN)
     subida = dt.datetime.fromisoformat(r["actualizado"]) if r.get("actualizado") else dt.datetime.min.replace(tzinfo=config.ARG)
     return subida + dt.timedelta(minutes=config.TELEGRAM_LIMITE_MIN)
 
