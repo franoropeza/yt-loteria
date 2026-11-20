@@ -45,6 +45,9 @@ FB_ENDPOINT = os.environ.get("FB_ENDPOINT", "reels").lower()
 FB_GRAPH_VERSION = os.environ.get("FB_GRAPH_VERSION", "v24.0")
 # pasados estos minutos desde la hora del sorteo ya no se sube a Facebook (ahí ya se publicó el extracto como imagen)
 FB_LIMITE_MIN = int(os.environ.get("FB_LIMITE_MIN", "60"))
+# pasados estos minutos desde la hora del sorteo ya no se comparte el enlace en el canal de Telegram (ver compartir.py).
+# Más largo que el de Facebook: el respaldo se arma recién a los 70 min y los videos con avisos se publican a mano.
+TELEGRAM_LIMITE_MIN = int(os.environ.get("TELEGRAM_LIMITE_MIN", "180"))
 
 # avisos por Telegram (opcional, ver telegram.py)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")

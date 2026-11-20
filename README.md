@@ -154,7 +154,8 @@ La Revancha) no se sube el video: se comparte en el muro de la página el **enla
 que llevaría el video (`FB_PUBLICAR=false` lo deja sin publicar). Misma regla que el video: solo el compacto normal
 (no el híbrido ni el respaldo) y solo si el video queda **público** en YouTube dentro de `FB_LIMITE_MIN` (60 min)
 desde la hora del sorteo; si no, no se publica nada en Facebook. Con `TELEGRAM_CANAL_CHAT_ID` se publica además en el
-canal de Telegram el título y el enlace de **todos** los compactos (normal, híbrido y respaldo), sin límite de tiempo.
+canal de Telegram el título y el enlace de **todos** los compactos (normal, híbrido y respaldo), solo si quedan
+públicos dentro de `TELEGRAM_LIMITE_MIN` (variable, por defecto 180 min) desde la hora del sorteo.
 El enlace se comparte recién cuando el video está **público** en YouTube: al subirlo queda pendiente en
 `estado/procesados.json` y en cada corrida el job `compartir` del workflow (`python compartir.py`) revisa la
 privacidad en YouTube y comparte los que ya se publicaron (por ejemplo, después de marcar el +18 a mano). Si un

@@ -4,7 +4,8 @@ Destinos:
   - facebook: muro de la página, para los sorteos que no se suben como video (los que no están en FB_SORTEOS, y los de
     FB_SORTEOS cuya cabeza no se pudo identificar bien: se corrige a mano en YouTube), con la misma regla que el video: solo el compacto normal (no el híbrido ni el respaldo) y solo si queda público dentro de
     FB_LIMITE_MIN desde la hora del sorteo; pasado ese tiempo se descarta (ya se publicó el extracto como imagen);
-  - telegram: canal público (TELEGRAM_CANAL_CHAT_ID), todos los compactos (normal, híbrido y respaldo), sin límite.
+  - telegram: canal público (TELEGRAM_CANAL_CHAT_ID), todos los compactos (normal, híbrido y respaldo), solo si quedan
+    públicos dentro de TELEGRAM_LIMITE_MIN desde la hora del sorteo (así publicar videos viejos no inunda el canal).
 
 Al subir a YouTube, procesar.py deja el compartido pendiente en estado/procesados.json ("compartir_pendiente").
 Cada corrida del workflow (job "compartir") mira la privacidad de los pendientes en YouTube y comparte los que ya
@@ -40,6 +41,10 @@ def pendiente(info, url_youtube, titulo):
     if not lista:
         return None
     p = {"url_youtube": url_youtube, "titulo": titulo, "destinos": lista}
+    if "telegram" in lista:
+        hora = facebook.limite(info)  # hora del sorteo + FB_LIMITE_MIN; sin hora confiable, desde ahora
+        base = hora - dt.timedelta(minutes=config.FB_LIMITE_MIN) if hora else dt.datetime.now(config.ARG)
+        p["limite_telegram"] = (base + dt.timedelta(minutes=config.TELEGRAM_LIMITE_MIN)).isoformat(timespec="seconds")
     if "facebook" in lista:
         p.update(mensaje_facebook=facebook.mensaje(info), limite_facebook=limite.isoformat(timespec="seconds"))
     return p
@@ -59,6 +64,15 @@ def _compartir(destino, p, titulo):
     return telegram.publicar_en_canal(titulo, p["url_youtube"])
 
 
+def _limite_telegram(r):
+    """Hasta cuándo se comparte en el canal de Telegram. Los pendientes anteriores a este límite no lo tienen
+    guardado: se cuenta desde la subida (unos 25 min después del sorteo)."""
+    if limite := r["compartir_pendiente"].get("limite_telegram"):
+        return dt.datetime.fromisoformat(limite)
+    subida = dt.datetime.fromisoformat(r["actualizado"]) if r.get("actualizado") else dt.datetime.min.replace(tzinfo=config.ARG)
+    return subida + dt.timedelta(minutes=config.TELEGRAM_LIMITE_MIN)
+
+
 def compartir_pendientes():
     """Comparte los enlaces pendientes cuyo video ya está público en YouTube. Guarda el estado si hubo cambios."""
     estado = json.loads(config.ESTADO.read_text(encoding="utf-8")) if config.ESTADO.exists() else {}
@@ -76,6 +90,14 @@ def compartir_pendientes():
             r["facebook_omitido"] = (f"Pasaron más de {config.FB_LIMITE_MIN} min del sorteo sin el video público en "
                                      "YouTube: no se comparte en Facebook")
             print(f"{nombre}: {r['facebook_omitido']}")
+            if not p["destinos"]:
+                del r["compartir_pendiente"]
+                continue
+        if "telegram" in p["destinos"] and dt.datetime.now(config.ARG) > _limite_telegram(r):
+            p["destinos"].remove("telegram")
+            r["telegram_omitido"] = (f"Pasaron más de {config.TELEGRAM_LIMITE_MIN} min del sorteo sin el video público en "
+                                     "YouTube: no se comparte en el canal de Telegram")
+            print(f"{nombre}: {r['telegram_omitido']}")
             if not p["destinos"]:
                 del r["compartir_pendiente"]
                 continue
